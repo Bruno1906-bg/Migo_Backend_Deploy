@@ -3,13 +3,13 @@
 Backend académico desarrollado con **Oracle Autonomous Database** y **Oracle REST Data Services (ORDS)**.  
 Este proyecto implementa un **API REST** para la gestión de usuarios y colonias, incluyendo operaciones CRUD y un servicio de login funcional.
 
-## 🚀 Tecnologías utilizadas
+## Tecnologías utilizadas
 - Oracle Autonomous Database
 - Oracle REST Data Services (ORDS)
 - SQL (definición de tablas y consultas)
 - JSON (formato de intercambio de datos)
 
-## 📂 Endpoints principales
+## Endpoints principales
 ### Usuarios
 - `GET /usuarios/` → Lista todos los usuarios
 - `GET /usuarios/:id` → Obtiene un usuario específico
@@ -42,13 +42,9 @@ Este proyecto implementa un **API REST** para la gestión de usuarios y colonias
   }
   ```
 
-## 📑 Documentación
+## Documentación
 - Scripts SQL para creación de tablas y datos de prueba en `/sql`
 - Colección de Postman para pruebas en `/docs`
 - Ejemplos de consumo en PHP y JavaScript en `/examples`
-
-## 🎯 Objetivo
-Este backend está diseñado para proyectos académicos y profesionales que requieran un sistema modular y orientado a servicios.  
-Permite que aplicaciones frontend consuman datos de manera segura y estructurada sin acceder directamente a la base de datos.
 
 ---
