@@ -6,10 +6,7 @@ BEGIN
   );
 
   -- GET todos los usuarios
-  ORDS.DEFINE_TEMPLATE(
-    p_module_name => 'usuarios_api',
-    p_pattern     => '/'
-  );
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'usuarios_api', p_pattern => '/');
   ORDS.DEFINE_HANDLER(
     p_module_name => 'usuarios_api',
     p_pattern     => '/',
@@ -19,16 +16,13 @@ BEGIN
   );
 
   -- GET usuario por ID
-  ORDS.DEFINE_TEMPLATE(
-    p_module_name => 'usuarios_api',
-    p_pattern     => '{id}'
-  );
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'usuarios_api', p_pattern => '{id}');
   ORDS.DEFINE_HANDLER(
     p_module_name => 'usuarios_api',
     p_pattern     => '{id}',
     p_method      => 'GET',
     p_source_type => 'item',
-    p_source      => 'SELECT * FROM USUARIOS WHERE ID_USUARIO = :id'
+    p_source      => 'SELECT * FROM USUARIOS WHERE ID_USUARIO=:id'
   );
 
   -- POST crear usuario
@@ -38,8 +32,8 @@ BEGIN
     p_method      => 'POST',
     p_source_type => 'plsql',
     p_source      => q'[
-      INSERT INTO USUARIOS (NOMBRE, APELLIDO, CORREO, CONTRASENA, TELEFONO, DIRECCION, ID_COLONIA, ROL)
-      VALUES (:NOMBRE, :APELLIDO, :CORREO, :CONTRASENA, :TELEFONO, :DIRECCION, :ID_COLONIA, :ROL);
+      INSERT INTO USUARIOS (NOMBRE, APELLIDO, CORREO, CONTRASENA, TELEFONO, DIRECCION, ID_COLONIA, ROL, ESTADO_CUENTA)
+      VALUES (:NOMBRE, :APELLIDO, :CORREO, :CONTRASENA, :TELEFONO, :DIRECCION, :ID_COLONIA, :ROL, :ESTADO_CUENTA);
     ]'
   );
 
@@ -52,7 +46,7 @@ BEGIN
     p_source      => q'[
       UPDATE USUARIOS
       SET NOMBRE=:NOMBRE, APELLIDO=:APELLIDO, CORREO=:CORREO, CONTRASENA=:CONTRASENA,
-          TELEFONO=:TELEFONO, DIRECCION=:DIRECCION, ID_COLONIA=:ID_COLONIA, ROL=:ROL
+          TELEFONO=:TELEFONO, DIRECCION=:DIRECCION, ID_COLONIA=:ID_COLONIA, ROL=:ROL, ESTADO_CUENTA=:ESTADO_CUENTA
       WHERE ID_USUARIO=:id;
     ]'
   );

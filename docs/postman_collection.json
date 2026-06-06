@@ -8,128 +8,122 @@
   "item": [
     {
       "name": "Usuarios - Obtener todos",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/usuarios/",
-          "protocol": "https",
-          "host": [
-            "ga6f1d821261f2a-migodb",
-            "adb",
-            "mx-queretaro-1",
-            "oraclecloudapps",
-            "com"
-          ],
-          "path": ["ords", "migo_user", "usuarios", ""]
-        }
-      }
+      "request": { "method": "GET", "url": { "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/usuarios/" } }
     },
     {
       "name": "Usuarios - Obtener por ID",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/usuarios/1",
-          "protocol": "https",
-          "host": [
-            "ga6f1d821261f2a-migodb",
-            "adb",
-            "mx-queretaro-1",
-            "oraclecloudapps",
-            "com"
-          ],
-          "path": ["ords", "migo_user", "usuarios", "1"]
-        }
-      }
+      "request": { "method": "GET", "url": { "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/usuarios/1" } }
     },
     {
       "name": "Usuarios - Crear nuevo",
       "request": {
         "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"nombre\": \"Bryan\",\n  \"apellido\": \"Martinez\",\n  \"correo\": \"bryan@example.com\",\n  \"contrasena\": \"ClaveSegura123\",\n  \"telefono\": \"9999999999\",\n  \"direccion\": \"Av. Principal #123\",\n  \"id_colonia\": 1,\n  \"rol\": \"ciudadano\",\n  \"estado_cuenta\": \"activo\"\n}"
+          "raw": "{ \"nombre\": \"Bryan\", \"apellido\": \"Martinez\", \"correo\": \"bryan@example.com\", \"contrasena\": \"ClaveSegura123\", \"telefono\": \"9999999999\", \"direccion\": \"Av. Principal #123\", \"id_colonia\": 1, \"rol\": \"usuario\" }"
         },
-        "url": {
-          "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/usuarios/",
-          "protocol": "https",
-          "host": [
-            "ga6f1d821261f2a-migodb",
-            "adb",
-            "mx-queretaro-1",
-            "oraclecloudapps",
-            "com"
-          ],
-          "path": ["ords", "migo_user", "usuarios", ""]
-        }
+        "url": { "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/usuarios/" }
       }
     },
     {
       "name": "Colonias - Obtener todas",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/colonias/",
-          "protocol": "https",
-          "host": [
-            "ga6f1d821261f2a-migodb",
-            "adb",
-            "mx-queretaro-1",
-            "oraclecloudapps",
-            "com"
-          ],
-          "path": ["ords", "migo_user", "colonias", ""]
-        }
-      }
+      "request": { "method": "GET", "url": { "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/colonias/" } }
     },
     {
       "name": "Colonias - Obtener por ID",
+      "request": { "method": "GET", "url": { "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/colonias/1" } }
+    },
+    {
+      "name": "Publicaciones - Obtener todas",
+      "request": { "method": "GET", "url": { "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/publicaciones/" } }
+    },
+    {
+      "name": "Publicaciones - Obtener por ID",
+      "request": { "method": "GET", "url": { "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/publicaciones/1" } }
+    },
+    {
+      "name": "Publicaciones - Crear nueva",
       "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/colonias/1",
-          "protocol": "https",
-          "host": [
-            "ga6f1d821261f2a-migodb",
-            "adb",
-            "mx-queretaro-1",
-            "oraclecloudapps",
-            "com"
-          ],
-          "path": ["ords", "migo_user", "colonias", "1"]
-        }
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{ \"id_usuario\": 1, \"id_colonia\": 1, \"id_especie\": 1, \"id_tipo\": 1, \"id_estado\": 1, \"nombre_pet\": \"Firulais\", \"descripcion\": \"Perrito encontrado en el parque\" }"
+        },
+        "url": { "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/publicaciones/" }
+      }
+    },
+    {
+      "name": "Fotos - Obtener por publicación",
+      "request": { "method": "GET", "url": { "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/publicaciones/1/fotos" } }
+    },
+    {
+      "name": "Fotos - Subir nueva",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{ \"ruta_imagen\": \"https://storage.oraclecloud.com/migo/fotos/firulais.png\" }"
+        },
+        "url": { "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/publicaciones/1/fotos" }
+      }
+    },
+    {
+      "name": "Fotos - Obtener detalle",
+      "request": { "method": "GET", "url": { "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/fotos/1" } }
+    },
+    {
+      "name": "Fotos - Eliminar",
+      "request": { "method": "DELETE", "url": { "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/fotos/1" } }
+    },
+    {
+      "name": "Especies - Obtener todas",
+      "request": { "method": "GET", "url": { "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/especies/" } }
+    },
+    {
+      "name": "Especies - Crear nueva",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{ \"nombre\": \"Perro\" }" },
+        "url": { "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/especies/" }
+      }
+    },
+    {
+      "name": "Tipos de Publicación - Obtener todos",
+      "request": { "method": "GET", "url": { "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/tipos_publi/" } }
+    },
+    {
+      "name": "Tipos de Publicación - Crear nuevo",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{ \"nombre\": \"Adopción\" }" },
+        "url": { "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/tipos_publi/" }
+      }
+    },
+    {
+      "name": "Estados de Publicación - Obtener todos",
+      "request": { "method": "GET", "url": { "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/estados_publi/" } }
+    },
+    {
+      "name": "Estados de Publicación - Crear nuevo",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{ \"nombre\": \"Activo\" }" },
+        "url": { "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/estados_publi/" }
       }
     },
     {
       "name": "Login",
       "request": {
         "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"correo\": \"usuario@example.com\",\n  \"contrasena\": \"ClaveSegura123\"\n}"
-        },
-        "url": {
-          "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/usuarios/login/",
-          "protocol": "https",
-          "host": [
-            "ga6f1d821261f2a-migodb",
-            "adb",
-            "mx-queretaro-1",
-            "oraclecloudapps",
-            "com"
-          ],
-          "path": ["ords", "migo_user", "usuarios", "login", ""]
-        }
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{ \"correo\": \"usuario@example.com\", \"contrasena\": \"ClaveSegura123\" }" },
+        "url": { "raw": "https://ga6f1d821261f2a-migodb.adb.mx-queretaro-1.oraclecloudapps.com/ords/migo_user/login/" }
       }
     }
   ]
