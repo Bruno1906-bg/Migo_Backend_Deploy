@@ -23,19 +23,32 @@ const db = mysql.createConnection({
 // Crear usuario
 app.post('/api/usuarios', (req, res) => {
     const { nombre, apellido, correo, contrasena, telefono, direccion, id_colonia, rol } = req.body;
-    const sql = `
-        INSERT INTO usuarios (nombre, apellido, correo, contrasena, telefono, direccion, id_colonia, rol)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-    db.query(sql, [nombre, apellido, correo, contrasena, telefono, direccion, id_colonia, rol], (err, result) => {
+
+    // Validar si el correo ya existe
+    const checkSql = "SELECT id_usuario FROM usuarios WHERE correo = ?";
+    db.query(checkSql, [correo], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Usuario registrado correctamente', id: result.insertId });
+        if (rows.length > 0) {
+            return res.status(400).json({ error: "El correo ya está registrado" });
+        }
+
+        // Insertar nuevo usuario
+        const sql = `
+            INSERT INTO usuarios (nombre, apellido, correo, contrasena, telefono, direccion, id_colonia, rol)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        db.query(sql, [nombre, apellido, correo, contrasena, telefono, direccion, id_colonia, rol], (err, result) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ message: 'Usuario registrado correctamente', id: result.insertId });
+        });
     });
 });
+
 
 // Login de usuario
 app.post('/api/login', (req, res) => {
     const { correo, contrasena } = req.body;
+
     const sql = `
         SELECT id_usuario, nombre, rol 
         FROM usuarios 
@@ -43,10 +56,22 @@ app.post('/api/login', (req, res) => {
     `;
     db.query(sql, [correo, contrasena], (err, results) => {
         if (err) return res.status(500).json({ message: 'Error de servidor' });
-        if (results.length > 0) res.json(results[0]);
-        else res.status(401).json({ message: 'Credenciales incorrectas' });
+
+        if (results.length > 0) {
+            const usuario = results[0];
+            if (usuario.rol !== 'usuario') {
+                return res.status(403).json({ message: 'No tienes acceso como usuario' });
+            }
+            res.json(usuario);
+        } else {
+            res.status(401).json({ message: 'Credenciales incorrectas' });
+        }
     });
 });
+
+
+
+
 
 // Colonias
 app.get('/api/colonias', (req, res) => {
@@ -115,7 +140,7 @@ app.get('/api/tipos_publi', (req, res) => {
 app.post('/api/fotos/:id_publi', upload.single('foto'), (req, res) => {
     const id_publi = req.params.id_publi;
     if (!req.file) return res.status(400).json({ message: 'No se subió archivo' });
-    
+
     const ruta = `/uploads/${req.file.filename}`;
     const sql = 'INSERT INTO fotos_publi (id_publi, ruta_imagen) VALUES (?, ?)';
     db.query(sql, [id_publi, ruta], (err, result) => {
@@ -125,58 +150,69 @@ app.post('/api/fotos/:id_publi', upload.single('foto'), (req, res) => {
 });
 
 
+// Login de veterinario
 app.post('/api/login-vet', (req, res) => {
     const { correo, contrasena } = req.body;
-    
-    // Hacemos un JOIN para ver si el usuario también existe en la tabla veterinarias
+
     const sql = `
         SELECT u.id_usuario, u.nombre, u.rol, v.id_vet 
         FROM usuarios u
         LEFT JOIN veterinarias v ON u.id_usuario = v.id_usuario
-        WHERE u.correo = ? AND u.contrasena = ? AND u.rol = 'veterinario'
+        WHERE u.correo = ? AND u.contrasena = ?
     `;
-
     db.query(sql, [correo, contrasena], (err, results) => {
         if (err) return res.status(500).json({ message: 'Error de servidor' });
-        
+
         if (results.length > 0) {
-            // El usuario existe y es veterinario
-            res.json({ 
-                success: true, 
-                usuario: results[0] 
-            });
+            const usuario = results[0];
+            if (usuario.rol !== 'veterinario') {
+                return res.status(403).json({ message: 'No tienes acceso como veterinario' });
+            }
+            res.json({ success: true, usuario });
         } else {
-            res.status(401).json({ message: 'Credenciales inválidas o no eres veterinario' });
+            res.status(401).json({ message: 'Credenciales inválidas' });
         }
     });
 });
 
+
+// Registro de veterinario
 app.post('/api/registro-vet', (req, res) => {
     const { nombre, apellido, correo, contrasena, id_colonia, nombre_establecimiento } = req.body;
-    
-    // 1. Iniciar transacción para asegurar que todo se guarde o nada se guarde
-    db.beginTransaction((err) => {
-        if (err) return res.status(500).json({ error: "Error de conexión" });
 
-        // 2. Insertar en tabla usuarios
-        const sqlUser = "INSERT INTO usuarios (nombre, apellido, correo, contrasena, id_colonia, rol) VALUES (?, ?, ?, ?, ?, 'veterinario')";
-        db.query(sqlUser, [nombre, apellido, correo, contrasena, id_colonia], (err, result) => {
-            if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
+    // Validar si el correo ya existe
+    const checkSql = "SELECT id_usuario FROM usuarios WHERE correo = ?";
+    db.query(checkSql, [correo], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (rows.length > 0) {
+            return res.status(400).json({ error: "El correo ya está registrado" });
+        }
 
-            const id_usuario = result.insertId;
+        // 1. Iniciar transacción para asegurar que todo se guarde o nada se guarde
+        db.beginTransaction((err) => {
+            if (err) return res.status(500).json({ error: "Error de conexión" });
 
-            // 3. Insertar en tabla veterinarias
-            const sqlVet = "INSERT INTO veterinarias (id_usuario, nombre_establecimiento) VALUES (?, ?)";
-            db.query(sqlVet, [id_usuario, nombre_establecimiento], (err) => {
+            // 2. Insertar en tabla usuarios
+            const sqlUser = "INSERT INTO usuarios (nombre, apellido, correo, contrasena, id_colonia, rol) VALUES (?, ?, ?, ?, ?, 'veterinario')";
+            db.query(sqlUser, [nombre, apellido, correo, contrasena, id_colonia], (err, result) => {
                 if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
 
-                db.commit((err) => {
-                    if (err) return db.rollback(() => res.status(500).json({ error: "Error al guardar" }));
-                    res.json({ message: 'Registro exitoso' });
+                const id_usuario = result.insertId;
+
+                // 3. Insertar en tabla veterinarias
+                const sqlVet = "INSERT INTO veterinarias (id_usuario, nombre_establecimiento) VALUES (?, ?)";
+                db.query(sqlVet, [id_usuario, nombre_establecimiento], (err) => {
+                    if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
+
+                    db.commit((err) => {
+                        if (err) return db.rollback(() => res.status(500).json({ error: "Error al guardar" }));
+                        res.json({ message: 'Registro exitoso' });
+                    });
                 });
             });
         });
     });
 });
+
 
 app.listen(4000, () => console.log('Servidor corriendo en puerto 4000 🏃‍♂️'));

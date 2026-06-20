@@ -1,3 +1,6 @@
+
+-- Migo Backend - SQL Inserts Importantes para el funcionamiento de la aplicación
+
 USE migo_db_VUE;
 
 -- 🔹 Colonias

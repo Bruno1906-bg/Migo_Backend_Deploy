@@ -121,3 +121,6 @@ CREATE TABLE IF NOT EXISTS vet_especies (
     FOREIGN KEY (id_vet) REFERENCES veterinarias(id_vet),
     FOREIGN KEY (id_especie) REFERENCES especies(id_especie)
 );
+
+--Modificaciones importantes para tabla de usuarios
+ALTER TABLE usuarios ADD UNIQUE (correo);
