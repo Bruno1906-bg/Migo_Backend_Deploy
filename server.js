@@ -9,7 +9,11 @@ const multer = require('multer');
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 
-app.use(cors());
+app.use(cors({
+    origin: 'https://comforting-capybara-8c1237.netlify.app',
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type']
+}));
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
