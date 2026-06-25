@@ -1,0 +1,8 @@
+"filename", "language", "JSON", "MS SQL", "Markdown", "JavaScript", "comment", "blank", "total"
+"c:\Users\bruno\Uni-projects\Migo_Backend\README.md", "Markdown", 0, 0, 89, 0, 0, 28, 117
+"c:\Users\bruno\Uni-projects\Migo_Backend\package-lock.json", "JSON", 1169, 0, 0, 0, 0, 1, 1170
+"c:\Users\bruno\Uni-projects\Migo_Backend\package.json", "JSON", 28, 0, 0, 0, 0, 1, 29
+"c:\Users\bruno\Uni-projects\Migo_Backend\server.js", "JavaScript", 0, 0, 0, 272, 27, 53, 352
+"c:\Users\bruno\Uni-projects\Migo_Backend\sql\inserts.sql", "MS SQL", 0, 153, 0, 0, 24, 33, 210
+"c:\Users\bruno\Uni-projects\Migo_Backend\sql\scripdatabasenueva.sql", "MS SQL", 0, 119, 0, 0, 7, 18, 144
+"Total", "-", 1197, 272, 89, 272, 58, 134, 2022
