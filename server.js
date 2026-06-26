@@ -15,8 +15,9 @@ cloudinary.config({
     api_secret: process.env.CDN_SECRET
 });
 
+// MODIFICADO: CORS configurado para aceptar tu nueva URL de Vercel
 app.use(cors({
-    origin: 'https://comforting-capybara-8c1237.netlify.app',
+    origin: 'https://migo-vue.vercel.app',
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type']
 }));
