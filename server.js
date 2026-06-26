@@ -22,26 +22,40 @@ app.use(cors({
 }));
 app.use(express.json());
 
-const db = mysql.createConnection({
-    host: process.env.MYSQLHOST,
-    user: process.env.MYSQLUSER,
-    password: process.env.MYSQLPASSWORD,
-    database: process.env.MYSQL_DATABASE,
-    port: parseInt(process.env.MYSQLPORT) || 3306
-});
+// --- CONFIGURACIÓN DE BASE DE DATOS CON RECONEXIÓN ---
+let db;
 
-console.log("Intentando conectar a:", process.env.MYSQLHOST);
-console.log("Usuario:", process.env.MYSQLUSER);
+function handleDisconnect() {
+    db = mysql.createConnection({
+        host: process.env.MYSQLHOST,
+        user: process.env.MYSQLUSER,
+        password: process.env.MYSQLPASSWORD,
+        database: process.env.MYSQL_DATABASE,
+        port: parseInt(process.env.MYSQLPORT) || 3306
+    });
 
-db.connect((err) => {
-    if (err) { console.error('Error BD:', err.message); return; }
-    console.log('Conectado exitosamente a la base de datos 🚀');
-});
+    db.connect((err) => {
+        if (err) {
+            console.error('Error al conectar a la BD:', err.message);
+            setTimeout(handleDisconnect, 2000);
+        } else {
+            console.log('Conectado exitosamente a la base de datos 🚀');
+        }
+    });
 
-db.on('error', (err) => {
-    console.error('Error en la base de datos:', err);
-    if (err.code === 'PROTOCOL_CONNECTION_LOST') console.log('Reconectando...');
-});
+    db.on('error', (err) => {
+        console.error('Error en la base de datos:', err);
+        if (err.code === 'PROTOCOL_CONNECTION_LOST') {
+            console.log('Conexión perdida. Intentando reconectar...');
+            handleDisconnect();
+        } else {
+            throw err;
+        }
+    });
+}
+
+handleDisconnect();
+// -----------------------------------------------------
 
 // COLONIAS
 app.get('/api/colonias', (req, res) => {
@@ -127,19 +141,14 @@ app.post('/api/fotos', upload.single('imagen'), async (req, res) => {
 
 app.post('/api/publicaciones-con-foto', upload.single('imagen'), async (req, res) => {
     const { id_usuario, id_colonia, id_especie, id_tipo, id_estado, nombre_pet, descripcion } = req.body;
-    
     try {
-        // 1. Insertar publicación
         const sql = "INSERT INTO publicaciones (id_usuario, id_colonia, id_especie, id_tipo, id_estado, nombre_pet, descripcion) VALUES (?, ?, ?, ?, ?, ?, ?)";
         const [result] = await db.promise().query(sql, [id_usuario, id_colonia, id_especie, id_tipo, id_estado, nombre_pet, descripcion]);
         const id_publi = result.insertId;
-
-        // 2. Si hay foto, subir a Cloudinary e insertar en BD
         if (req.file) {
             const resultCloud = await cloudinary.uploader.upload(req.file.path, { folder: 'migo/publicaciones' });
             await db.promise().query("INSERT INTO fotos_publi (id_publi, ruta_imagen) VALUES (?, ?)", [id_publi, resultCloud.secure_url]);
         }
-
         res.json({ message: 'Publicación exitosa', id_publi });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -190,7 +199,6 @@ app.put('/api/veterinarias/:id_vet', (req, res) => {
         });
 });
 
-// LOGO VETERINARIA con Cloudinary
 app.post('/api/veterinarias/:id_vet/logo', upload.single('logo'), async (req, res) => {
     try {
         const result = await cloudinary.uploader.upload(req.file.path, { folder: 'migo/logos' });
@@ -204,7 +212,6 @@ app.post('/api/veterinarias/:id_vet/logo', upload.single('logo'), async (req, re
     }
 });
 
-// LOGIN VETERINARIO
 app.post('/api/login-vet', (req, res) => {
     const { correo, contrasena } = req.body;
     db.query("SELECT u.id_usuario, u.nombre, u.rol, v.id_vet FROM usuarios u LEFT JOIN veterinarias v ON u.id_usuario = v.id_usuario WHERE u.correo = ? AND u.contrasena = ?",
@@ -214,7 +221,7 @@ app.post('/api/login-vet', (req, res) => {
         });
 });
 
-// COMENTARIOS
+// COMENTARIOS Y RESEÑAS
 app.get('/api/comentarios/:id_publi', (req, res) => {
     db.query("SELECT c.*, CONCAT(u.nombre, ' ', u.apellido) AS nombre_completo FROM comentarios c JOIN usuarios u ON c.id_usuario = u.id_usuario WHERE c.id_publi = ? ORDER BY c.fecha ASC",
         [req.params.id_publi], (err, results) => {
@@ -232,25 +239,6 @@ app.post('/api/comentarios', (req, res) => {
         });
 });
 
-app.put('/api/comentarios/:id', (req, res) => {
-    const { comentario, id_usuario } = req.body;
-    db.query("UPDATE comentarios SET comentario = ? WHERE id_comentario = ? AND id_usuario = ?",
-        [comentario, req.params.id, id_usuario], (err, result) => {
-            if (err) return res.status(500).json({ error: err.message });
-            if (result.affectedRows === 0) return res.status(403).json({ error: "No autorizado" });
-            res.json({ message: 'Comentario actualizado' });
-        });
-});
-
-app.delete('/api/comentarios/:id/:id_usuario', (req, res) => {
-    db.query("DELETE FROM comentarios WHERE id_comentario = ? AND id_usuario = ?",
-        [req.params.id, req.params.id_usuario], (err) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ message: 'Comentario eliminado' });
-        });
-});
-
-// RESEÑAS
 app.get('/api/resenas/:id_vet', (req, res) => {
     db.query(`SELECT r.*, CONCAT(u.nombre, ' ', u.apellido) AS nombre_usuario FROM resenas r JOIN usuarios u ON r.id_usuario = u.id_usuario WHERE r.id_vet = ? ORDER BY r.fecha_resena DESC`,
         [req.params.id_vet], (err, results) => {
@@ -268,22 +256,6 @@ app.post('/api/resenas', (req, res) => {
         });
 });
 
-app.put('/api/resenas/:id', (req, res) => {
-    const { comentario, calificacion } = req.body;
-    db.query("UPDATE resenas SET comentario = ?, calificacion = ? WHERE id_resena = ?",
-        [comentario, calificacion, req.params.id], (err) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ message: 'Reseña actualizada' });
-        });
-});
-
-app.delete('/api/resenas/:id', (req, res) => {
-    db.query("DELETE FROM resenas WHERE id_resena = ?", [req.params.id], (err) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Reseña eliminada' });
-    });
-});
-
 // CATÁLOGOS
 app.get('/api/especies', (req, res) => {
     db.query("SELECT id_especie, nombre FROM especies ORDER BY nombre ASC", (err, results) => {
@@ -294,27 +266,6 @@ app.get('/api/especies', (req, res) => {
 
 app.get('/api/tipos_publi', (req, res) => {
     db.query("SELECT id_tipo, nombre FROM tipos_publi ORDER BY nombre ASC", (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(results);
-    });
-});
-
-app.get('/api/estados_publi', (req, res) => {
-    db.query("SELECT id_estado, nombre FROM estados_publi", (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(results);
-    });
-});
-
-app.get('/api/servicios', (req, res) => {
-    db.query("SELECT id_servicio, nombre FROM servicios", (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(results);
-    });
-});
-
-app.get('/api/dias_semana', (req, res) => {
-    db.query("SELECT id_dia, nombre FROM dias_semana", (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(results);
     });
