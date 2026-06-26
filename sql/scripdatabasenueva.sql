@@ -143,3 +143,14 @@ CREATE TABLE comentarios (
     FOREIGN KEY (id_publi) REFERENCES publicaciones(id_publi) ON DELETE CASCADE,
     FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario) ON DELETE CASCADE
 );
+
+--TABLA DE LOGS PARA REGISTRO DE ACCIONES
+CREATE TABLE logs (
+  id_log INT AUTO_INCREMENT PRIMARY KEY,
+  id_usuario INT NULL,
+  accion VARCHAR(100) NOT NULL,
+  detalle TEXT,
+  fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+

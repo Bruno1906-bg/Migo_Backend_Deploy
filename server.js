@@ -18,6 +18,21 @@ const db = mysql.createConnection({
     database: 'migo_db_VUE'
 });
 
+///////Función para registrar logs////////
+function registrarLogLoginFallido(correo, detalle) {
+  console.log("Registrando log fallido:", correo, detalle); // Debug
+  const sql = "INSERT INTO logs (correo, accion, detalle) VALUES (?, 'LOGIN_FALLIDO', ?)";
+  db.query(sql, [correo, detalle], (err) => {
+    if (err) {
+      console.error("Error guardando log:", err.message);
+    } else {
+      console.log("Log guardado correctamente");
+    }
+  });
+}
+
+
+
 // ENDPOINTS
 
 
@@ -63,27 +78,30 @@ app.get('/api/usuarios/:id', (req, res) => {
 
 // Login de usuario
 app.post('/api/login', (req, res) => {
-    const { correo, contrasena } = req.body;
+  const { correo, contrasena } = req.body;
 
-    const sql = `
-        SELECT id_usuario, nombre, rol 
-        FROM usuarios 
-        WHERE correo = ? AND contrasena = ?
-    `;
-    db.query(sql, [correo, contrasena], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Error de servidor' });
+  const sql = `
+      SELECT id_usuario, nombre, rol 
+      FROM usuarios 
+      WHERE correo = ? AND contrasena = ?
+  `;
+  db.query(sql, [correo, contrasena], (err, results) => {
+    if (err) return res.status(500).json({ message: 'Error de servidor' });
 
-        if (results.length > 0) {
-            const usuario = results[0];
-            if (usuario.rol !== 'usuario') {
-                return res.status(403).json({ message: 'No tienes acceso como usuario' });
-            }
-            res.json(usuario);
-        } else {
-            res.status(401).json({ message: 'Credenciales incorrectas' });
-        }
-    });
+    if (results.length > 0) {
+      const usuario = results[0];
+      if (usuario.rol !== 'usuario') {
+        registrarLogLoginFallido(correo, "Intento de login como usuario sin rol válido");
+        return res.status(403).json({ message: 'No tienes acceso como usuario' });
+      }
+      res.json(usuario);
+    } else {
+      registrarLogLoginFallido(correo, "Credenciales incorrectas en login de usuario");
+      res.status(401).json({ message: 'Credenciales incorrectas' });
+    }
+  });
 });
+
 
 // Actualizar perfil de usuario
 app.put('/api/usuarios/:id_usuario', (req, res) => {
@@ -193,28 +211,31 @@ app.post('/api/fotos/:id_publi', upload.single('foto'), (req, res) => {
 
 // Login de veterinario
 app.post('/api/login-vet', (req, res) => {
-    const { correo, contrasena } = req.body;
+  const { correo, contrasena } = req.body;
 
-    const sql = `
-        SELECT u.id_usuario, u.nombre, u.rol, v.id_vet 
-        FROM usuarios u
-        LEFT JOIN veterinarias v ON u.id_usuario = v.id_usuario
-        WHERE u.correo = ? AND u.contrasena = ?
-    `;
-    db.query(sql, [correo, contrasena], (err, results) => {
-        if (err) return res.status(500).json({ message: 'Error de servidor' });
+  const sql = `
+      SELECT u.id_usuario, u.nombre, u.rol, v.id_vet 
+      FROM usuarios u
+      LEFT JOIN veterinarias v ON u.id_usuario = v.id_usuario
+      WHERE u.correo = ? AND u.contrasena = ?
+  `;
+  db.query(sql, [correo, contrasena], (err, results) => {
+    if (err) return res.status(500).json({ message: 'Error de servidor' });
 
-        if (results.length > 0) {
-            const usuario = results[0];
-            if (usuario.rol !== 'veterinario') {
-                return res.status(403).json({ message: 'No tienes acceso como veterinario' });
-            }
-            res.json({ success: true, usuario });
-        } else {
-            res.status(401).json({ message: 'Credenciales inválidas' });
-        }
-    });
+    if (results.length > 0) {
+      const usuario = results[0];
+      if (usuario.rol !== 'veterinario') {
+        registrarLogLoginFallido(correo, "Intento de login como veterinario sin rol válido");
+        return res.status(403).json({ message: 'No tienes acceso como veterinario' });
+      }
+      res.json({ success: true, usuario });
+    } else {
+      registrarLogLoginFallido(correo, "Credenciales inválidas en login de veterinario");
+      res.status(401).json({ message: 'Credenciales inválidas' });
+    }
+  });
 });
+
 
 // Registro de veterinario
 app.post('/api/registro-vet', (req, res) => {
@@ -403,7 +424,6 @@ app.get('/api/comentarios/:id_publi', (req, res) => {
         res.json(results);
     });
 });
-console.log("ID del veterinario:", idVet);
 
 //  Publicar comentario
 app.post('/api/comentarios', (req, res) => {
