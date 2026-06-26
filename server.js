@@ -119,6 +119,37 @@ app.post('/api/login-vet', (req, res) => {
     });
 });
 
+// REGISTRO VETERINARIA
+app.post('/api/registro-vet', (req, res) => {
+    const { nombre, apellido, correo, contrasena, telefono, direccion, id_colonia, nombre_establecimiento, descripcion, sitio_web, correo_negocio, telefono_local } = req.body;
+
+    // Primero verificar si el correo ya existe
+    db.query("SELECT id_usuario FROM usuarios WHERE correo = ?", [correo], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (rows.length > 0) return res.status(400).json({ error: "El correo ya está registrado" });
+
+        // Insertar usuario con rol veterinario
+        const sqlUsuario = "INSERT INTO usuarios (nombre, apellido, correo, contrasena, telefono, direccion, id_colonia, rol) VALUES (?, ?, ?, ?, ?, ?, ?, 'veterinario')";
+        db.query(sqlUsuario, [nombre, apellido, correo, contrasena, telefono, direccion, id_colonia], (err, resultUsuario) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            const id_usuario = resultUsuario.insertId;
+
+            // Insertar veterinaria vinculada al usuario
+            const sqlVet = "INSERT INTO veterinarias (id_usuario, nombre_establecimiento, descripcion, sitio_web, id_colonia, correo_negocio, telefono_local) VALUES (?, ?, ?, ?, ?, ?, ?)";
+            db.query(sqlVet, [id_usuario, nombre_establecimiento, descripcion, sitio_web, id_colonia, correo_negocio, telefono_local], (err, resultVet) => {
+                if (err) return res.status(500).json({ error: err.message });
+
+                res.json({ 
+                    message: 'Veterinaria registrada exitosamente', 
+                    id_usuario,
+                    id_vet: resultVet.insertId 
+                });
+            });
+        });
+    });
+});
+
 // COMENTARIOS Y RESEÑAS (Simplificado para brevedad)
 app.get('/api/comentarios/:id_publi', (req, res) => {
     db.query("SELECT c.*, CONCAT(u.nombre, ' ', u.apellido) AS nombre_completo FROM comentarios c JOIN usuarios u ON c.id_usuario = u.id_usuario WHERE c.id_publi = ? ORDER BY c.fecha ASC", [req.params.id_publi], (err, results) => {
