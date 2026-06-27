@@ -154,3 +154,6 @@ CREATE TABLE logs (
 );
 
 
+-- Cambios importantes tabla horarios
+ALTER TABLE horarios_vet 
+ADD CONSTRAINT unique_vet_dia UNIQUE (id_vet, id_dia);
