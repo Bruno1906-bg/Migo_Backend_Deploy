@@ -356,6 +356,67 @@ app.post('/api/veterinarias/:id/logo', upload.single('logo'), (req, res) => {
     });
 });
 
+// Obtener horarios de una veterinaria
+app.get('/api/horarios/:idVet', (req, res) => {
+    const { idVet } = req.params;
+    const sql = `
+        SELECT h.id_horario, h.id_vet, h.id_dia, d.nombre AS dia, 
+               h.hora_apertura, h.hora_cierre, h.cerrado
+        FROM horarios_vet h
+        JOIN dias_semana d ON h.id_dia = d.id_dia
+        WHERE h.id_vet = ?
+        ORDER BY h.id_dia ASC
+    `;
+    db.query(sql, [idVet], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+// Actualizar horarios de una veterinaria
+app.put('/api/horarios/:idVet', (req, res) => {
+    const { idVet } = req.params;
+    const horarios = req.body; // objeto con id_dia como clave
+
+    db.beginTransaction(err => {
+        if (err) return res.status(500).json({ error: "Error de conexión" });
+
+        const dias = Object.keys(horarios);
+
+        // Procesar cada día
+        dias.forEach(id_dia => {
+            const { hora_apertura, hora_cierre, cerrado } = horarios[id_dia];
+
+            const sql = `
+                INSERT INTO horarios_vet (id_vet, id_dia, hora_apertura, hora_cierre, cerrado)
+                VALUES (?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE 
+                    hora_apertura = VALUES(hora_apertura),
+                    hora_cierre = VALUES(hora_cierre),
+                    cerrado = VALUES(cerrado)
+            `;
+
+            db.query(sql, [idVet, id_dia, hora_apertura || null, hora_cierre || null, cerrado ? 1 : 0], (err) => {
+                if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
+            });
+        });
+
+        db.commit(err => {
+            if (err) return db.rollback(() => res.status(500).json({ error: "Error al guardar horarios" }));
+            res.json({ message: "Horarios actualizados correctamente" });
+        });
+    });
+});
+
+// Obtener días de la semana
+app.get('/api/dias-semana', (req, res) => {
+    const sql = "SELECT id_dia, nombre FROM dias_semana ORDER BY id_dia ASC";
+    db.query(sql, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
 //Obtener detalles de una veterinaria específica
 app.get('/api/veterinaria/:id', (req, res) => {
     const sql = `
