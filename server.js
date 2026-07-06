@@ -155,6 +155,13 @@ app.post('/api/login', (req, res) => {
     });
 });
 
+app.get('/api/colonias', (req, res) => {
+    db.query('SELECT id_colonia, nombre FROM colonias', (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(results);
+    });
+});
+
 // ═══════════════════════════════════════
 //  PUBLICACIONES
 // ═══════════════════════════════════════
