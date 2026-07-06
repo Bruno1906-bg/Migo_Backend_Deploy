@@ -47,10 +47,12 @@ const upload = multer({ dest: 'uploads/' });
 
 // Correo (nodemailer) — credenciales SIEMPRE desde variables de entorno
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true, // true para puerto 465
     auth: {
         user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+        pass: process.env.EMAIL_PASS // ¡IMPORTANTE: Usa la "App Password" de 16 caracteres!
     }
 });
 
@@ -76,23 +78,29 @@ function enviarCorreoVerificacion(correoDestino, nombre, token) {
     });
 }
 
-function enviarAvisoAdministrativo(correoDestino, nombreUsuario, motivo, esEliminacion) {
+// Cambia la función por esta versión asíncrona
+async function enviarAvisoAdministrativo(correoDestino, nombreUsuario, motivo, esEliminacion) {
     const asunto = esEliminacion ? 'Aviso importante: Publicación eliminada' : 'Advertencia de MIGO';
     const titulo = esEliminacion ? 'Publicación eliminada por incumplimiento' : 'Aviso de advertencia';
     const mensaje = esEliminacion
         ? `Lamentamos informarte que tu publicación ha sido eliminada debido a: <strong>${motivo}</strong>.`
         : `Hemos recibido un reporte sobre tu comportamiento en la plataforma. Motivo: <strong>${motivo}</strong>.`;
 
-    transporter.sendMail({
-        from: `"MIGO - Administración" <${process.env.EMAIL_USER}>`,
-        to: correoDestino,
-        subject: asunto,
-        html: `<div style="font-family: Arial, sans-serif; color: #223338;">
-                <h2 style="color: #d35400;">${titulo}</h2>
-                <p>Hola <strong>${nombreUsuario}</strong>,</p>
-                <p>${mensaje}</p>
-               </div>`
-    }).catch(err => console.error("Error enviando correo:", err.message));
+    try {
+        await transporter.sendMail({
+            from: `"MIGO - Administración" <${process.env.EMAIL_USER}>`,
+            to: correoDestino,
+            subject: asunto,
+            html: `<div style="font-family: Arial, sans-serif; color: #223338;">
+                    <h2 style="color: #d35400;">${titulo}</h2>
+                    <p>Hola <strong>${nombreUsuario}</strong>,</p>
+                    <p>${mensaje}</p>
+                   </div>`
+        });
+        console.log("Correo de aviso enviado con éxito a:", correoDestino);
+    } catch (err) {
+        console.error("Error enviando correo de aviso:", err.message);
+    }
 }
 
 // BD — conexión vía variables de entorno (host en la nube, no localhost)
