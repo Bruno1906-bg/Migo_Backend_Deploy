@@ -13,15 +13,24 @@ const app = express();
 //  CONFIGURACIÓN GENERAL
 // ═══════════════════════════════════════
 
-// URLs base (en local usan localhost, en producción se toman de las variables de entorno)
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:4000';
+// Lista de dominios permitidos para CORS
+const allowedOrigins = [
+    'http://localhost:5173',
+    'https://migo-vue.vercel.app'
+];
 
-// CORS: en producción solo se permite el dominio del frontend desplegado
+// CORS: valida si el origen de la petición está en nuestra lista permitida
 app.use(cors({
-    origin: process.env.CORS_ORIGIN || FRONTEND_URL,
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('No permitido por CORS'));
+        }
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type']
+    allowedHeaders: ['Content-Type'],
+    credentials: true
 }));
 
 app.use(express.json());
