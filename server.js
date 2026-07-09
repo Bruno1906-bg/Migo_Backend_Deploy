@@ -9,8 +9,14 @@ const cloudinary = require('cloudinary').v2;
 
 const app = express();
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:4000';
+const normalizeUrl = (value, fallback) => {
+    if (!value) return fallback;
+    if (/^https?:\/\//i.test(value)) return value.replace(/\/$/, '');
+    return `https://${value.replace(/\/$/, '')}`;
+};
+
+const FRONTEND_URL = normalizeUrl(process.env.FRONTEND_URL || process.env.VERCEL_URL || process.env.PUBLIC_FRONTEND_URL, 'http://localhost:5173');
+const BACKEND_URL = normalizeUrl(process.env.BACKEND_URL || process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PUBLIC_BACKEND_URL, 'http://localhost:4000');
 
 app.use(cors({
     origin: process.env.CORS_ORIGIN || FRONTEND_URL,
@@ -29,20 +35,27 @@ cloudinary.config({
 const upload = multer({ dest: 'uploads/' });
 
 // Configuración SMTP para Gmail (Requiere App Password de 16 caracteres)
+const EMAIL_USER = process.env.EMAIL_USER || process.env.SMTP_USER;
+const EMAIL_PASS = process.env.EMAIL_PASS || process.env.SMTP_PASS;
+
 const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 465,
     secure: true,
     auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+        user: EMAIL_USER,
+        pass: EMAIL_PASS
     }
 });
 
 async function enviarCorreoVerificacion(correoDestino, nombre, token) {
+    if (!EMAIL_USER || !EMAIL_PASS) {
+        throw new Error('Faltan las credenciales de correo en Railway (EMAIL_USER / EMAIL_PASS).');
+    }
+
     const link = `${BACKEND_URL}/api/verificar-cuenta?token=${token}`;
     return await transporter.sendMail({
-        from: `"MIGO - Comunidad de Mascotas" <${process.env.EMAIL_USER}>`,
+        from: `"MIGO - Comunidad de Mascotas" <${EMAIL_USER}>`,
         to: correoDestino,
         subject: 'Verifica tu cuenta en MIGO',
         html: `
@@ -62,11 +75,35 @@ async function enviarCorreoVerificacion(correoDestino, nombre, token) {
 
 // BD — conexión
 const db = mysql.createConnection({
-    host: process.env.MYSQLHOST,
-    user: process.env.MYSQLUSER,
-    password: process.env.MYSQLPASSWORD,
-    database: process.env.MYSQL_DATABASE,
-    port: parseInt(process.env.MYSQLPORT) || 3306
+    host: process.env.MYSQLHOST || process.env.DB_HOST,
+    user: process.env.MYSQLUSER || process.env.DB_USER,
+    password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD,
+    database: process.env.MYSQL_DATABASE || process.env.DB_NAME,
+    port: parseInt(process.env.MYSQLPORT || process.env.DB_PORT) || 3306
+});
+
+function asegurarColumnasUbicacionVeterinaria() {
+    const columnas = [
+        "ALTER TABLE veterinarias ADD COLUMN latitud DECIMAL(10,7) DEFAULT NULL",
+        "ALTER TABLE veterinarias ADD COLUMN longitud DECIMAL(10,7) DEFAULT NULL"
+    ];
+
+    columnas.forEach(sql => {
+        db.query(sql, err => {
+            if (err && err.code !== 'ER_DUP_FIELDNAME') {
+                console.error('No se pudo asegurar la columna de ubicación:', err.message);
+            }
+        });
+    });
+}
+
+db.connect(err => {
+    if (err) {
+        console.error('Error de conexión a la base de datos:', err.message);
+        return;
+    }
+
+    asegurarColumnasUbicacionVeterinaria();
 });
 
 // Logs
@@ -80,8 +117,25 @@ function registrarLogLoginFallido(correo, detalle) {
 //  USUARIOS (Optimizado)
 // ═══════════════════════════════════════
 
-app.post('/api/usuarios', (req, res) => {
+const registrarUsuarioHandler = (req, res) => {
     const { nombre, apellido, correo, contrasena, telefono, direccion, id_colonia, rol } = req.body;
+
+    const camposFaltantes = [];
+    if (!nombre) camposFaltantes.push('nombre');
+    if (!apellido) camposFaltantes.push('apellido');
+    if (!correo) camposFaltantes.push('correo');
+    if (!contrasena) camposFaltantes.push('contrasena');
+    if (!telefono) camposFaltantes.push('telefono');
+    if (!direccion) camposFaltantes.push('direccion');
+    if (!id_colonia) camposFaltantes.push('id_colonia');
+    if (!rol) camposFaltantes.push('rol');
+
+    if (camposFaltantes.length > 0) {
+        return res.status(400).json({
+            error: 'Faltan campos obligatorios para registrar el usuario.',
+            details: camposFaltantes.join(', ')
+        });
+    }
 
     const checkSql = "SELECT id_usuario FROM usuarios WHERE correo = ?";
     db.query(checkSql, [correo], (err, rows) => {
@@ -100,20 +154,24 @@ app.post('/api/usuarios', (req, res) => {
             try {
                 // Esperamos el envío del correo de forma asíncrona
                 await enviarCorreoVerificacion(correo, nombre, token);
-                res.json({
+                return res.status(201).json({
                     message: 'Usuario registrado correctamente. Revisa tu correo para verificar tu cuenta.',
                     id: result.insertId
                 });
             } catch (mailErr) {
                 console.error("ERROR EN ENVÍO DE CORREO:", mailErr);
-                res.status(500).json({ 
-                    error: "Usuario creado, pero falló el envío del correo de verificación.",
-                    details: mailErr.message 
+                return res.status(201).json({ 
+                    message: 'Usuario registrado correctamente, pero no se pudo enviar el correo de verificación.',
+                    warning: mailErr.message,
+                    id: result.insertId
                 });
             }
         });
     });
-});
+};
+
+app.post('/api/usuarios', registrarUsuarioHandler);
+app.post('/api/usuarios/register', registrarUsuarioHandler);
 
 app.get('/api/verificar-cuenta', (req, res) => {
     const { token } = req.query;
@@ -140,7 +198,7 @@ app.get('/api/usuarios/:id', (req, res) => {
     });
 });
 
-app.post('/api/login', (req, res) => {
+const loginHandler = (req, res) => {
     const { correo, contrasena } = req.body;
     db.query("SELECT id_usuario, nombre, rol, verificado FROM usuarios WHERE correo = ? AND contrasena = ?", [correo, contrasena], (err, results) => {
         if (err) return res.status(500).json({ message: 'Error de servidor' });
@@ -153,7 +211,10 @@ app.post('/api/login', (req, res) => {
             res.status(401).json({ message: 'Credenciales incorrectas' });
         }
     });
-});
+};
+
+app.post('/api/login', loginHandler);
+app.post('/api/usuarios/login', loginHandler);
 
 app.get('/api/colonias', (req, res) => {
     db.query('SELECT id_colonia, nombre FROM colonias', (err, results) => {
@@ -483,14 +544,24 @@ app.get('/api/veterinaria/:id/detallado', (req, res) => {
 
 // Actualizar datos de una veterinaria
 app.put('/api/veterinarias/:id', (req, res) => {
-    const { nombre_establecimiento, descripcion, correo_negocio, telefono_local, id_colonia, imagen_logo, sitio_web } = req.body;
+    const {
+        nombre_establecimiento,
+        descripcion,
+        correo_negocio,
+        telefono_local,
+        id_colonia,
+        imagen_logo,
+        sitio_web,
+        latitud,
+        longitud
+    } = req.body;
     const sql = `
         UPDATE veterinarias
         SET nombre_establecimiento = ?, descripcion = ?, correo_negocio = ?,
-            telefono_local = ?, id_colonia = ?, imagen_logo = ?, sitio_web = ?
+            telefono_local = ?, id_colonia = ?, imagen_logo = ?, sitio_web = ?, latitud = ?, longitud = ?
         WHERE id_vet = ?
     `;
-    db.query(sql, [nombre_establecimiento, descripcion, correo_negocio, telefono_local, id_colonia, imagen_logo, sitio_web, req.params.id], (err, result) => {
+    db.query(sql, [nombre_establecimiento, descripcion, correo_negocio, telefono_local, id_colonia, imagen_logo, sitio_web, latitud ?? null, longitud ?? null, req.params.id], (err, result) => {
         if (err) return res.status(500).json({ error: err.message });
         if (result.affectedRows === 0) return res.status(404).json({ message: "Veterinaria no encontrada" });
         res.json({ message: "Veterinaria actualizada correctamente" });

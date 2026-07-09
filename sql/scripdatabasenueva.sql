@@ -365,6 +365,8 @@ CREATE TABLE IF NOT EXISTS `veterinarias` (
   `correo_negocio` varchar(255) DEFAULT NULL,
   `telefono_local` varchar(20) DEFAULT NULL,
   `id_colonia` int DEFAULT NULL,
+  `latitud` decimal(10,7) DEFAULT NULL,
+  `longitud` decimal(10,7) DEFAULT NULL,
   PRIMARY KEY (`id_vet`),
   UNIQUE KEY `id_usuario` (`id_usuario`),
   KEY `id_colonia` (`id_colonia`),
