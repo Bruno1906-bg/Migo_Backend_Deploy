@@ -82,6 +82,30 @@ const db = mysql.createConnection({
     port: parseInt(process.env.MYSQLPORT || process.env.DB_PORT) || 3306
 });
 
+function asegurarColumnasUbicacionVeterinaria() {
+    const columnas = [
+        "ALTER TABLE veterinarias ADD COLUMN latitud DECIMAL(10,7) DEFAULT NULL",
+        "ALTER TABLE veterinarias ADD COLUMN longitud DECIMAL(10,7) DEFAULT NULL"
+    ];
+
+    columnas.forEach(sql => {
+        db.query(sql, err => {
+            if (err && err.code !== 'ER_DUP_FIELDNAME') {
+                console.error('No se pudo asegurar la columna de ubicación:', err.message);
+            }
+        });
+    });
+}
+
+db.connect(err => {
+    if (err) {
+        console.error('Error de conexión a la base de datos:', err.message);
+        return;
+    }
+
+    asegurarColumnasUbicacionVeterinaria();
+});
+
 // Logs
 function registrarLogLoginFallido(correo, detalle) {
     db.query("INSERT INTO logs (correo, accion, detalle) VALUES (?, 'LOGIN_FALLIDO', ?)", [correo, detalle], (err) => {
@@ -520,14 +544,24 @@ app.get('/api/veterinaria/:id/detallado', (req, res) => {
 
 // Actualizar datos de una veterinaria
 app.put('/api/veterinarias/:id', (req, res) => {
-    const { nombre_establecimiento, descripcion, correo_negocio, telefono_local, id_colonia, imagen_logo, sitio_web } = req.body;
+    const {
+        nombre_establecimiento,
+        descripcion,
+        correo_negocio,
+        telefono_local,
+        id_colonia,
+        imagen_logo,
+        sitio_web,
+        latitud,
+        longitud
+    } = req.body;
     const sql = `
         UPDATE veterinarias
         SET nombre_establecimiento = ?, descripcion = ?, correo_negocio = ?,
-            telefono_local = ?, id_colonia = ?, imagen_logo = ?, sitio_web = ?
+            telefono_local = ?, id_colonia = ?, imagen_logo = ?, sitio_web = ?, latitud = ?, longitud = ?
         WHERE id_vet = ?
     `;
-    db.query(sql, [nombre_establecimiento, descripcion, correo_negocio, telefono_local, id_colonia, imagen_logo, sitio_web, req.params.id], (err, result) => {
+    db.query(sql, [nombre_establecimiento, descripcion, correo_negocio, telefono_local, id_colonia, imagen_logo, sitio_web, latitud ?? null, longitud ?? null, req.params.id], (err, result) => {
         if (err) return res.status(500).json({ error: err.message });
         if (result.affectedRows === 0) return res.status(404).json({ message: "Veterinaria no encontrada" });
         res.json({ message: "Veterinaria actualizada correctamente" });
