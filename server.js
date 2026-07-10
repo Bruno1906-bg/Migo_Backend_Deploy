@@ -34,16 +34,6 @@ const CLOUDINARY_API_SECRET =
     process.env.CLOUDINARY_SECRET ||
     process.env.API_SECRET;
 const CLOUDINARY_URL = process.env.CLOUDINARY_URL;
-const CLOUDINARY_DEBUG = {
-    CDN_NAME: Boolean(process.env.CDN_NAME),
-    CDN_KEY: Boolean(process.env.CDN_KEY),
-    CDN_SECRET: Boolean(process.env.CDN_SECRET),
-    CLOUDINARY_CLOUD_NAME: Boolean(process.env.CLOUDINARY_CLOUD_NAME),
-    CLOUDINARY_API_KEY: Boolean(process.env.CLOUDINARY_API_KEY),
-    CLOUDINARY_API_SECRET: Boolean(process.env.CLOUDINARY_API_SECRET),
-    CLOUDINARY_URL: Boolean(process.env.CLOUDINARY_URL)
-};
-
 function obtenerConfigCloudinary() {
     if (CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET) {
         return {
@@ -96,15 +86,6 @@ app.use(express.json());
 const cloudinarySetup = obtenerConfigCloudinary();
 cloudinary.config(cloudinarySetup.config);
 
-console.log('[CLOUDINARY] Configuracion activa:', {
-    source: cloudinarySetup.source,
-    hasCloudName: Boolean(CLOUDINARY_CLOUD_NAME),
-    hasApiKey: Boolean(CLOUDINARY_API_KEY),
-    hasApiSecret: Boolean(CLOUDINARY_API_SECRET),
-    hasUrl: Boolean(CLOUDINARY_URL),
-    envFlags: CLOUDINARY_DEBUG
-});
-
 const upload = multer({ storage: multer.memoryStorage() });
 
 function subirBufferACloudinary(buffer, folder) {
@@ -145,13 +126,6 @@ function normalizarSenderBrevo(valor, nombreFallback) {
 }
 
 const BREVO_SENDER = normalizarSenderBrevo(BREVO_SENDER_EMAIL, BREVO_SENDER_NAME);
-
-console.log('[MAIL] Configuracion activa:', {
-    provider: MAIL_PROVIDER,
-    hasBrevoApiKey: Boolean(BREVO_API_KEY),
-    senderEmail: BREVO_SENDER.email || '(no configurado)',
-    senderName: BREVO_SENDER.name
-});
 
 function clasificarErrorCorreo(error) {
     const code = error?.code || '';
@@ -210,7 +184,7 @@ function construirTextoVerificacion(nombre, link) {
     ].join('\n');
 }
 
-async function enviarCorreoVerificacionConBrevo(correoDestino, nombre, link) {
+async function enviarCorreoConBrevo({ correoDestino, asunto, htmlContent, textContent }) {
     if (!BREVO_API_KEY) {
         const error = new Error('Falta BREVO_API_KEY en Railway.');
         error.code = 'CREDENTIALS_MISSING';
@@ -235,9 +209,9 @@ async function enviarCorreoVerificacionConBrevo(correoDestino, nombre, link) {
                 email: BREVO_SENDER.email
             },
             to: [{ email: correoDestino }],
-            subject: 'Verifica tu cuenta en MIGO',
-            htmlContent: construirHtmlVerificacion(nombre, link),
-            textContent: construirTextoVerificacion(nombre, link)
+            subject: asunto,
+            htmlContent,
+            textContent
         })
     });
 
@@ -253,14 +227,55 @@ async function enviarCorreoVerificacionConBrevo(correoDestino, nombre, link) {
     return result;
 }
 
+async function enviarCorreoVerificacionConBrevo(correoDestino, nombre, link) {
+    return enviarCorreoConBrevo({
+        correoDestino,
+        asunto: 'Verifica tu cuenta en MIGO',
+        htmlContent: construirHtmlVerificacion(nombre, link),
+        textContent: construirTextoVerificacion(nombre, link)
+    });
+}
+
+async function enviarAvisoAdministrativo(correoDestino, nombre, motivo, esEliminacion) {
+    const asunto = esEliminacion
+        ? 'Tu publicación fue eliminada en MIGO'
+        : 'Tu cuenta fue reportada en MIGO';
+
+    const htmlContent = `
+        <div style="font-family: Arial, sans-serif; color: #223338; max-width: 500px;">
+            <h2 style="color: #0f9d8e;">Hola ${nombre}</h2>
+            <p>${esEliminacion
+                ? 'Se eliminó una publicación asociada a tu cuenta.'
+                : 'Tu cuenta fue reportada por un administrador.'}</p>
+            <p><strong>Motivo:</strong> ${motivo}</p>
+            <p>Si crees que se trata de un error, revisa tu actividad en la plataforma.</p>
+        </div>
+    `;
+
+    const textContent = [
+        `Hola ${nombre}`,
+        '',
+        esEliminacion
+            ? 'Se eliminó una publicación asociada a tu cuenta.'
+            : 'Tu cuenta fue reportada por un administrador.',
+        `Motivo: ${motivo}`,
+        '',
+        'Si crees que se trata de un error, revisa tu actividad en la plataforma.'
+    ].join('\n');
+
+    return enviarCorreoConBrevo({
+        correoDestino,
+        asunto,
+        htmlContent,
+        textContent
+    });
+}
+
 async function enviarCorreoVerificacion(correoDestino, nombre, token) {
     const link = `${BACKEND_URL}/api/verificar-cuenta?token=${token}`;
     if (MAIL_PROVIDER === 'brevo') {
-        console.log(`[MAIL] Intentando envío de verificación con brevo para ${correoDestino}`);
         try {
-            const result = await enviarCorreoVerificacionConBrevo(correoDestino, nombre, link);
-            console.log(`[MAIL] Correo de verificación enviado con brevo a ${correoDestino}. id=${result?.messageId || result?.messageId || 'N/A'}`);
-            return result;
+            return await enviarCorreoVerificacionConBrevo(correoDestino, nombre, link);
         } catch (error) {
             const categoria = clasificarErrorCorreo(error);
             console.error('[MAIL] Falló brevo para', correoDestino, 'categoria=', categoria, 'code=', error?.code || 'N/A', 'mensaje=', error?.message || error, 'details=', error?.details || null);
@@ -559,13 +574,6 @@ app.post('/api/fotos/:id_publi', upload.single('foto'), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'No se subió archivo' });
 
     try {
-        console.log('[UPLOAD] Subiendo foto de publicación:', {
-            id_publi,
-            originalname: req.file.originalname,
-            mimetype: req.file.mimetype,
-            size: req.file.size
-        });
-
         const result = await subirBufferACloudinary(req.file.buffer, 'migo/publicaciones');
         db.query('INSERT INTO fotos_publi (id_publi, ruta_imagen) VALUES (?, ?)', [id_publi, result.secure_url], (err) => {
             if (err) return res.status(500).json({ error: err.message });
@@ -805,13 +813,6 @@ app.post('/api/veterinarias/:id/logo', upload.single('logo'), async (req, res) =
     if (!req.file) return res.status(400).json({ message: 'No se subió archivo' });
 
     try {
-        console.log('[UPLOAD] Subiendo logo de veterinaria:', {
-            id_vet,
-            originalname: req.file.originalname,
-            mimetype: req.file.mimetype,
-            size: req.file.size
-        });
-
         const result = await subirBufferACloudinary(req.file.buffer, 'migo/logos');
         db.query('UPDATE veterinarias SET imagen_logo = ? WHERE id_vet = ?', [result.secure_url, id_vet], (err, dbResult) => {
             if (err) return res.status(500).json({ error: err.message });
@@ -1103,7 +1104,13 @@ app.delete('/api/admin/publicaciones/:id_publi', (req, res) => {
                         if (result.affectedRows === 0) return res.status(404).json({ message: "No encontrada" });
 
                         if (usuario) {
-                            enviarAvisoAdministrativo(usuario.correo, usuario.nombre, 'Incumplimiento de normas', true);
+                            enviarAvisoAdministrativo(usuario.correo, usuario.nombre, 'Incumplimiento de normas', true).catch(error => {
+                                console.error('[MAIL] No se pudo enviar aviso administrativo:', {
+                                    code: error?.code || 'N/A',
+                                    message: error?.message || String(error),
+                                    details: error?.details || null
+                                });
+                            });
                         }
                         res.json({ message: "Publicación eliminada y usuario notificado" });
                     });
@@ -1118,16 +1125,25 @@ app.post('/api/admin/reportar-usuario', (req, res) => {
     const { id_usuario_reportado, id_admin, motivo } = req.body;
 
     verificarAdmin(id_admin, (err, esAdmin) => {
+        if (err) return res.status(500).json({ message: err.message });
         if (!esAdmin) return res.status(403).json({ message: "No tienes permisos" });
 
         db.query("SELECT correo, nombre FROM usuarios WHERE id_usuario = ?", [id_usuario_reportado], (err, results) => {
             const usuario = results && results[0];
 
             db.query("INSERT INTO reportes_usuario (id_usuario_reportado, id_admin, motivo) VALUES (?, ?, ?)", [id_usuario_reportado, id_admin, motivo], (err) => {
+                if (err) return res.status(500).json({ error: err.message });
                 db.query("UPDATE usuarios SET estado = 'reportado' WHERE id_usuario = ?", [id_usuario_reportado], (err) => {
+                    if (err) return res.status(500).json({ error: err.message });
 
                     if (usuario) {
-                        enviarAvisoAdministrativo(usuario.correo, usuario.nombre, motivo, false);
+                        enviarAvisoAdministrativo(usuario.correo, usuario.nombre, motivo, false).catch(error => {
+                            console.error('[MAIL] No se pudo enviar aviso administrativo:', {
+                                code: error?.code || 'N/A',
+                                message: error?.message || String(error),
+                                details: error?.details || null
+                            });
+                        });
                     }
                     res.json({ message: "Usuario reportado y notificado" });
                 });
@@ -1232,4 +1248,4 @@ app.delete('/api/usuarios/:id', async (req, res) => {
 // ═══════════════════════════════════════
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, '0.0.0.0', () => console.log(`Migo corriendo en el puerto ${PORT} 🏃‍♂️`));
+app.listen(PORT, '0.0.0.0');
