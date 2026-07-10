@@ -5,6 +5,7 @@ const cors = require('cors');
 const multer = require('multer');
 const crypto = require('crypto');
 const cloudinary = require('cloudinary').v2;
+const { Readable } = require('stream');
 
 const app = express();
 
@@ -31,7 +32,18 @@ cloudinary.config({
     api_secret: process.env.CDN_SECRET
 });
 
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ storage: multer.memoryStorage() });
+
+function subirBufferACloudinary(buffer, folder) {
+    return new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream({ folder }, (error, result) => {
+            if (error) return reject(error);
+            resolve(result);
+        });
+
+        Readable.from(buffer).pipe(stream);
+    });
+}
 
 const MAIL_PROVIDER = (process.env.MAIL_PROVIDER || 'brevo').toLowerCase();
 const BREVO_API_KEY = process.env.BREVO_API_KEY || process.env.BREVO_KEY;
@@ -474,12 +486,24 @@ app.post('/api/fotos/:id_publi', upload.single('foto'), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'No se subió archivo' });
 
     try {
-        const result = await cloudinary.uploader.upload(req.file.path, { folder: 'migo/publicaciones' });
+        console.log('[UPLOAD] Subiendo foto de publicación:', {
+            id_publi,
+            originalname: req.file.originalname,
+            mimetype: req.file.mimetype,
+            size: req.file.size
+        });
+
+        const result = await subirBufferACloudinary(req.file.buffer, 'migo/publicaciones');
         db.query('INSERT INTO fotos_publi (id_publi, ruta_imagen) VALUES (?, ?)', [id_publi, result.secure_url], (err) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ message: 'Foto subida', ruta_imagen: result.secure_url });
         });
     } catch (err) {
+        console.error('[UPLOAD] Error al subir foto de publicación:', {
+            code: err?.code || 'N/A',
+            message: err?.message || String(err),
+            http_code: err?.http_code || null
+        });
         res.status(500).json({ error: 'Error al subir foto: ' + err.message });
     }
 });
@@ -708,13 +732,25 @@ app.post('/api/veterinarias/:id/logo', upload.single('logo'), async (req, res) =
     if (!req.file) return res.status(400).json({ message: 'No se subió archivo' });
 
     try {
-        const result = await cloudinary.uploader.upload(req.file.path, { folder: 'migo/logos' });
+        console.log('[UPLOAD] Subiendo logo de veterinaria:', {
+            id_vet,
+            originalname: req.file.originalname,
+            mimetype: req.file.mimetype,
+            size: req.file.size
+        });
+
+        const result = await subirBufferACloudinary(req.file.buffer, 'migo/logos');
         db.query('UPDATE veterinarias SET imagen_logo = ? WHERE id_vet = ?', [result.secure_url, id_vet], (err, dbResult) => {
             if (err) return res.status(500).json({ error: err.message });
             if (dbResult.affectedRows === 0) return res.status(404).json({ message: "Veterinaria no encontrada" });
             res.json({ message: 'Logo actualizado correctamente', imagen_logo: result.secure_url });
         });
     } catch (err) {
+        console.error('[UPLOAD] Error al subir logo de veterinaria:', {
+            code: err?.code || 'N/A',
+            message: err?.message || String(err),
+            http_code: err?.http_code || null
+        });
         res.status(500).json({ error: 'Error al subir logo: ' + err.message });
     }
 });
