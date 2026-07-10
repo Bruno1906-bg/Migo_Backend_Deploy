@@ -38,11 +38,34 @@ const BREVO_API_KEY = process.env.BREVO_API_KEY || process.env.BREVO_KEY;
 const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || process.env.MAIL_FROM;
 const BREVO_SENDER_NAME = process.env.BREVO_SENDER_NAME || 'MIGO';
 
+function normalizarSenderBrevo(valor, nombreFallback) {
+    if (!valor) {
+        return { email: '', name: nombreFallback };
+    }
+
+    const texto = String(valor).trim();
+    const angulo = texto.match(/^(.*)<([^<>\s]+@[^<>\s]+)>$/);
+
+    if (angulo) {
+        return {
+            name: angulo[1].trim().replace(/"/g, '') || nombreFallback,
+            email: angulo[2].trim()
+        };
+    }
+
+    return {
+        name: nombreFallback,
+        email: texto
+    };
+}
+
+const BREVO_SENDER = normalizarSenderBrevo(BREVO_SENDER_EMAIL, BREVO_SENDER_NAME);
+
 console.log('[MAIL] Configuracion activa:', {
     provider: MAIL_PROVIDER,
     hasBrevoApiKey: Boolean(BREVO_API_KEY),
-    senderEmail: BREVO_SENDER_EMAIL || '(no configurado)',
-    senderName: BREVO_SENDER_NAME
+    senderEmail: BREVO_SENDER.email || '(no configurado)',
+    senderName: BREVO_SENDER.name
 });
 
 function clasificarErrorCorreo(error) {
@@ -98,7 +121,7 @@ async function enviarCorreoVerificacionConBrevo(correoDestino, nombre, link) {
         throw error;
     }
 
-    if (!BREVO_SENDER_EMAIL) {
+    if (!BREVO_SENDER.email) {
         const error = new Error('Falta BREVO_SENDER_EMAIL o MAIL_FROM en Railway.');
         error.code = 'CREDENTIALS_MISSING';
         throw error;
@@ -112,8 +135,8 @@ async function enviarCorreoVerificacionConBrevo(correoDestino, nombre, link) {
         },
         body: JSON.stringify({
             sender: {
-                name: BREVO_SENDER_NAME,
-                email: BREVO_SENDER_EMAIL
+                name: BREVO_SENDER.name,
+                email: BREVO_SENDER.email
             },
             to: [{ email: correoDestino }],
             subject: 'Verifica tu cuenta en MIGO',
