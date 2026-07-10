@@ -1248,4 +1248,15 @@ app.delete('/api/usuarios/:id', async (req, res) => {
 // ═══════════════════════════════════════
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, '0.0.0.0');
+const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Servidor iniciado en el puerto ${PORT}`);
+});
+
+function cerrarServidor(signal) {
+    server.close(() => {
+        process.exit(0);
+    });
+}
+
+process.on('SIGTERM', cerrarServidor);
+process.on('SIGINT', cerrarServidor);
