@@ -18,10 +18,31 @@ const normalizeUrl = (value, fallback) => {
 const FRONTEND_URL = normalizeUrl(process.env.FRONTEND_URL || process.env.VERCEL_URL || process.env.PUBLIC_FRONTEND_URL, 'http://localhost:5173');
 const BACKEND_URL = normalizeUrl(process.env.BACKEND_URL || process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PUBLIC_BACKEND_URL, 'http://localhost:4000');
 
-const CLOUDINARY_CLOUD_NAME = process.env.CDN_NAME || process.env.CLOUDINARY_CLOUD_NAME;
-const CLOUDINARY_API_KEY = process.env.CDN_KEY || process.env.CLOUDINARY_API_KEY;
-const CLOUDINARY_API_SECRET = process.env.CDN_SECRET || process.env.CLOUDINARY_API_SECRET;
+const CLOUDINARY_CLOUD_NAME =
+    process.env.CDN_NAME ||
+    process.env.CLOUDINARY_CLOUD_NAME ||
+    process.env.CLOUDINARY_CLOUDNAME ||
+    process.env.CLOUD_NAME;
+const CLOUDINARY_API_KEY =
+    process.env.CDN_KEY ||
+    process.env.CLOUDINARY_API_KEY ||
+    process.env.CLOUDINARY_KEY ||
+    process.env.API_KEY;
+const CLOUDINARY_API_SECRET =
+    process.env.CDN_SECRET ||
+    process.env.CLOUDINARY_API_SECRET ||
+    process.env.CLOUDINARY_SECRET ||
+    process.env.API_SECRET;
 const CLOUDINARY_URL = process.env.CLOUDINARY_URL;
+const CLOUDINARY_DEBUG = {
+    CDN_NAME: Boolean(process.env.CDN_NAME),
+    CDN_KEY: Boolean(process.env.CDN_KEY),
+    CDN_SECRET: Boolean(process.env.CDN_SECRET),
+    CLOUDINARY_CLOUD_NAME: Boolean(process.env.CLOUDINARY_CLOUD_NAME),
+    CLOUDINARY_API_KEY: Boolean(process.env.CLOUDINARY_API_KEY),
+    CLOUDINARY_API_SECRET: Boolean(process.env.CLOUDINARY_API_SECRET),
+    CLOUDINARY_URL: Boolean(process.env.CLOUDINARY_URL)
+};
 
 function obtenerConfigCloudinary() {
     if (CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET) {
@@ -80,7 +101,8 @@ console.log('[CLOUDINARY] Configuracion activa:', {
     hasCloudName: Boolean(CLOUDINARY_CLOUD_NAME),
     hasApiKey: Boolean(CLOUDINARY_API_KEY),
     hasApiSecret: Boolean(CLOUDINARY_API_SECRET),
-    hasUrl: Boolean(CLOUDINARY_URL)
+    hasUrl: Boolean(CLOUDINARY_URL),
+    envFlags: CLOUDINARY_DEBUG
 });
 
 const upload = multer({ storage: multer.memoryStorage() });
