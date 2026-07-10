@@ -344,6 +344,13 @@ app.get('/api/colonias', (req, res) => {
     });
 });
 
+app.get('/api/especies', (req, res) => {
+    db.query('SELECT id_especie, nombre FROM especies', (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(results);
+    });
+});
+
 // ═══════════════════════════════════════
 //  PUBLICACIONES
 // ═══════════════════════════════════════
