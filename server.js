@@ -33,21 +33,23 @@ cloudinary.config({
 
 const upload = multer({ dest: 'uploads/' });
 
-const MAIL_PROVIDER = (process.env.MAIL_PROVIDER || 'resend').toLowerCase();
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const MAIL_FROM = process.env.MAIL_FROM || 'MIGO <onboarding@resend.dev>';
+const MAIL_PROVIDER = (process.env.MAIL_PROVIDER || 'brevo').toLowerCase();
+const BREVO_API_KEY = process.env.BREVO_API_KEY || process.env.BREVO_KEY;
+const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || process.env.MAIL_FROM;
+const BREVO_SENDER_NAME = process.env.BREVO_SENDER_NAME || 'MIGO';
 
 console.log('[MAIL] Configuracion activa:', {
     provider: MAIL_PROVIDER,
-    hasResendApiKey: Boolean(RESEND_API_KEY),
-    from: MAIL_FROM
+    hasBrevoApiKey: Boolean(BREVO_API_KEY),
+    senderEmail: BREVO_SENDER_EMAIL || '(no configurado)',
+    senderName: BREVO_SENDER_NAME
 });
 
 function clasificarErrorCorreo(error) {
     const code = error?.code || '';
     const message = `${error?.message || ''}`.toLowerCase();
 
-    if (!RESEND_API_KEY) {
+    if (!BREVO_API_KEY) {
         return 'CREDENTIALS_MISSING';
     }
 
@@ -65,6 +67,10 @@ function clasificarErrorCorreo(error) {
 
     if (message.includes('domain not verified') || message.includes('sender domain') || message.includes('from address')) {
         return 'SENDER_NOT_VERIFIED';
+    }
+
+    if (message.includes('sender email') || message.includes('sender name') || message.includes('invalid parameter')) {
+        return 'SENDER_INVALID';
     }
 
     return 'UNKNOWN_MAIL_ERROR';
@@ -85,22 +91,31 @@ function construirHtmlVerificacion(nombre, link) {
     `;
 }
 
-async function enviarCorreoVerificacionConResend(correoDestino, nombre, link) {
-    if (!RESEND_API_KEY) {
-        const error = new Error('Falta RESEND_API_KEY en Railway.');
+async function enviarCorreoVerificacionConBrevo(correoDestino, nombre, link) {
+    if (!BREVO_API_KEY) {
+        const error = new Error('Falta BREVO_API_KEY en Railway.');
         error.code = 'CREDENTIALS_MISSING';
         throw error;
     }
 
-    const response = await fetch('https://api.resend.com/emails', {
+    if (!BREVO_SENDER_EMAIL) {
+        const error = new Error('Falta BREVO_SENDER_EMAIL o MAIL_FROM en Railway.');
+        error.code = 'CREDENTIALS_MISSING';
+        throw error;
+    }
+
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
         headers: {
-            'Authorization': `Bearer ${RESEND_API_KEY}`,
+            'api-key': BREVO_API_KEY,
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            from: MAIL_FROM,
-            to: [correoDestino],
+            sender: {
+                name: BREVO_SENDER_NAME,
+                email: BREVO_SENDER_EMAIL
+            },
+            to: [{ email: correoDestino }],
             subject: 'Verifica tu cuenta en MIGO',
             html: construirHtmlVerificacion(nombre, link)
         })
@@ -120,15 +135,15 @@ async function enviarCorreoVerificacionConResend(correoDestino, nombre, link) {
 
 async function enviarCorreoVerificacion(correoDestino, nombre, token) {
     const link = `${BACKEND_URL}/api/verificar-cuenta?token=${token}`;
-    if (MAIL_PROVIDER === 'resend') {
-        console.log(`[MAIL] Intentando envío de verificación con resend para ${correoDestino}`);
+    if (MAIL_PROVIDER === 'brevo') {
+        console.log(`[MAIL] Intentando envío de verificación con brevo para ${correoDestino}`);
         try {
-            const result = await enviarCorreoVerificacionConResend(correoDestino, nombre, link);
-            console.log(`[MAIL] Correo de verificación enviado con resend a ${correoDestino}. id=${result?.id || 'N/A'}`);
+            const result = await enviarCorreoVerificacionConBrevo(correoDestino, nombre, link);
+            console.log(`[MAIL] Correo de verificación enviado con brevo a ${correoDestino}. id=${result?.messageId || result?.messageId || 'N/A'}`);
             return result;
         } catch (error) {
             const categoria = clasificarErrorCorreo(error);
-            console.error('[MAIL] Falló resend para', correoDestino, 'categoria=', categoria, 'code=', error?.code || 'N/A', 'mensaje=', error?.message || error, 'details=', error?.details || null);
+            console.error('[MAIL] Falló brevo para', correoDestino, 'categoria=', categoria, 'code=', error?.code || 'N/A', 'mensaje=', error?.message || error, 'details=', error?.details || null);
             error.category = categoria;
             throw error;
         }
