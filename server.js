@@ -23,6 +23,35 @@ const CLOUDINARY_API_KEY = process.env.CDN_KEY || process.env.CLOUDINARY_API_KEY
 const CLOUDINARY_API_SECRET = process.env.CDN_SECRET || process.env.CLOUDINARY_API_SECRET;
 const CLOUDINARY_URL = process.env.CLOUDINARY_URL;
 
+function obtenerConfigCloudinary() {
+    if (CLOUDINARY_URL) {
+        try {
+            const parsed = new URL(CLOUDINARY_URL);
+            return {
+                source: 'CLOUDINARY_URL',
+                config: {
+                    cloud_name: parsed.hostname,
+                    api_key: decodeURIComponent(parsed.username),
+                    api_secret: decodeURIComponent(parsed.password),
+                    secure: true
+                }
+            };
+        } catch (error) {
+            console.error('[CLOUDINARY] CLOUDINARY_URL inválida, usando CDN_* si existen:', error.message);
+        }
+    }
+
+    return {
+        source: 'CDN_*',
+        config: {
+            cloud_name: CLOUDINARY_CLOUD_NAME,
+            api_key: CLOUDINARY_API_KEY,
+            api_secret: CLOUDINARY_API_SECRET,
+            secure: true
+        }
+    };
+}
+
 app.use(cors({
     origin: process.env.CORS_ORIGIN || FRONTEND_URL,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -31,17 +60,11 @@ app.use(cors({
 
 app.use(express.json());
 
-if (CLOUDINARY_URL) {
-    cloudinary.config(CLOUDINARY_URL);
-} else {
-    cloudinary.config({
-        cloud_name: CLOUDINARY_CLOUD_NAME,
-        api_key: CLOUDINARY_API_KEY,
-        api_secret: CLOUDINARY_API_SECRET
-    });
-}
+const cloudinarySetup = obtenerConfigCloudinary();
+cloudinary.config(cloudinarySetup.config);
 
 console.log('[CLOUDINARY] Configuracion activa:', {
+    source: cloudinarySetup.source,
     hasCloudName: Boolean(CLOUDINARY_CLOUD_NAME),
     hasApiKey: Boolean(CLOUDINARY_API_KEY),
     hasApiSecret: Boolean(CLOUDINARY_API_SECRET),
