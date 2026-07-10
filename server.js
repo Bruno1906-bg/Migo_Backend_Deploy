@@ -114,6 +114,17 @@ function construirHtmlVerificacion(nombre, link) {
     `;
 }
 
+function construirTextoVerificacion(nombre, link) {
+    return [
+        `¡Hola ${nombre}!`,
+        '',
+        'Gracias por registrarte en MIGO. Haz clic aquí para activar tu cuenta:',
+        link,
+        '',
+        'Si el enlace no funciona, copia y pega la URL en tu navegador.'
+    ].join('\n');
+}
+
 async function enviarCorreoVerificacionConBrevo(correoDestino, nombre, link) {
     if (!BREVO_API_KEY) {
         const error = new Error('Falta BREVO_API_KEY en Railway.');
@@ -140,7 +151,8 @@ async function enviarCorreoVerificacionConBrevo(correoDestino, nombre, link) {
             },
             to: [{ email: correoDestino }],
             subject: 'Verifica tu cuenta en MIGO',
-            html: construirHtmlVerificacion(nombre, link)
+            htmlContent: construirHtmlVerificacion(nombre, link),
+            textContent: construirTextoVerificacion(nombre, link)
         })
     });
 
