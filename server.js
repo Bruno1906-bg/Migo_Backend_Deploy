@@ -21,6 +21,7 @@ const BACKEND_URL = normalizeUrl(process.env.BACKEND_URL || process.env.RAILWAY_
 const CLOUDINARY_CLOUD_NAME = process.env.CDN_NAME || process.env.CLOUDINARY_CLOUD_NAME;
 const CLOUDINARY_API_KEY = process.env.CDN_KEY || process.env.CLOUDINARY_API_KEY;
 const CLOUDINARY_API_SECRET = process.env.CDN_SECRET || process.env.CLOUDINARY_API_SECRET;
+const CLOUDINARY_URL = process.env.CLOUDINARY_URL;
 
 app.use(cors({
     origin: process.env.CORS_ORIGIN || FRONTEND_URL,
@@ -30,16 +31,21 @@ app.use(cors({
 
 app.use(express.json());
 
-cloudinary.config({
-    cloud_name: CLOUDINARY_CLOUD_NAME,
-    api_key: CLOUDINARY_API_KEY,
-    api_secret: CLOUDINARY_API_SECRET
-});
+if (CLOUDINARY_URL) {
+    cloudinary.config(CLOUDINARY_URL);
+} else {
+    cloudinary.config({
+        cloud_name: CLOUDINARY_CLOUD_NAME,
+        api_key: CLOUDINARY_API_KEY,
+        api_secret: CLOUDINARY_API_SECRET
+    });
+}
 
 console.log('[CLOUDINARY] Configuracion activa:', {
     hasCloudName: Boolean(CLOUDINARY_CLOUD_NAME),
     hasApiKey: Boolean(CLOUDINARY_API_KEY),
-    hasApiSecret: Boolean(CLOUDINARY_API_SECRET)
+    hasApiSecret: Boolean(CLOUDINARY_API_SECRET),
+    hasUrl: Boolean(CLOUDINARY_URL)
 });
 
 const upload = multer({ storage: multer.memoryStorage() });
