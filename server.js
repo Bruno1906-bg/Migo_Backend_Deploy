@@ -4,7 +4,6 @@ const mysql = require('mysql2');
 const cors = require('cors');
 const multer = require('multer');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 const cloudinary = require('cloudinary').v2;
 
 const app = express();
@@ -34,39 +33,29 @@ cloudinary.config({
 
 const upload = multer({ dest: 'uploads/' });
 
-// Configuración SMTP para Gmail (Requiere App Password de 16 caracteres)
-const EMAIL_USER = process.env.EMAIL_USER || process.env.SMTP_USER;
-const EMAIL_PASS = process.env.EMAIL_PASS || process.env.SMTP_PASS;
+const MAIL_PROVIDER = (process.env.MAIL_PROVIDER || 'resend').toLowerCase();
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const MAIL_FROM = process.env.MAIL_FROM || 'MIGO <onboarding@resend.dev>';
 
-const createGmailTransport = (port, secure) => nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port,
-    secure,
-    family: 4,
-    auth: {
-        user: EMAIL_USER,
-        pass: EMAIL_PASS
-    }
+console.log('[MAIL] Configuracion activa:', {
+    provider: MAIL_PROVIDER,
+    hasResendApiKey: Boolean(RESEND_API_KEY),
+    from: MAIL_FROM
 });
-
-const mailTransports = [
-    { name: 'gmail-465', transport: createGmailTransport(465, true) },
-    { name: 'gmail-587', transport: createGmailTransport(587, false) }
-];
 
 function clasificarErrorCorreo(error) {
     const code = error?.code || '';
     const message = `${error?.message || ''}`.toLowerCase();
 
-    if (!EMAIL_USER || !EMAIL_PASS) {
+    if (!RESEND_API_KEY) {
         return 'CREDENTIALS_MISSING';
     }
 
-    if (code === 'EAUTH' || message.includes('username and password not accepted') || message.includes('invalid login')) {
+    if (code === 'HTTP_401' || code === 'HTTP_403' || message.includes('unauthorized') || message.includes('forbidden')) {
         return 'CREDENTIALS_INVALID';
     }
 
-    if (code === 'ENETUNREACH' || code === 'EHOSTUNREACH' || code === 'ETIMEDOUT' || code === 'ESOCKET' || code === 'ECONNRESET') {
+    if (code === 'ENETUNREACH' || code === 'EHOSTUNREACH' || code === 'ETIMEDOUT' || code === 'ECONNRESET' || code === 'ESOCKET') {
         return 'NETWORK_BLOCKED';
     }
 
@@ -74,58 +63,80 @@ function clasificarErrorCorreo(error) {
         return 'DNS_OR_RESOLUTION';
     }
 
-    if (message.includes('less secure') || message.includes('application-specific password') || message.includes('app password')) {
-        return 'GMAIL_APP_PASSWORD';
+    if (message.includes('domain not verified') || message.includes('sender domain') || message.includes('from address')) {
+        return 'SENDER_NOT_VERIFIED';
     }
 
-    return 'UNKNOWN_SMTP_ERROR';
+    return 'UNKNOWN_MAIL_ERROR';
+}
+
+function construirHtmlVerificacion(nombre, link) {
+    return `
+        <div style="font-family: Arial, sans-serif; color: #223338; max-width: 500px;">
+            <h2 style="color: #0f9d8e;">¡Hola ${nombre}!</h2>
+            <p>Gracias por registrarte en MIGO. Haz clic aquí para activar tu cuenta:</p>
+            <p style="text-align:center; margin: 24px 0;">
+                <a href="${link}" style="background:#0f9d8e; color:#fff; padding:12px 24px; border-radius:8px; text-decoration:none; font-weight:bold;">
+                    Verificar mi cuenta
+                </a>
+            </p>
+            <p>Si el botón no funciona, usa este enlace: ${link}</p>
+        </div>
+    `;
+}
+
+async function enviarCorreoVerificacionConResend(correoDestino, nombre, link) {
+    if (!RESEND_API_KEY) {
+        const error = new Error('Falta RESEND_API_KEY en Railway.');
+        error.code = 'CREDENTIALS_MISSING';
+        throw error;
+    }
+
+    const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${RESEND_API_KEY}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            from: MAIL_FROM,
+            to: [correoDestino],
+            subject: 'Verifica tu cuenta en MIGO',
+            html: construirHtmlVerificacion(nombre, link)
+        })
+    });
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        const error = new Error(result.message || result.error || `Error HTTP ${response.status} al enviar correo`);
+        error.code = `HTTP_${response.status}`;
+        error.details = JSON.stringify(result);
+        throw error;
+    }
+
+    return result;
 }
 
 async function enviarCorreoVerificacion(correoDestino, nombre, token) {
-    if (!EMAIL_USER || !EMAIL_PASS) {
-        console.error('[MAIL] Faltan credenciales de correo en Railway. Revisa EMAIL_USER y EMAIL_PASS.');
-        throw new Error('Faltan las credenciales de correo en Railway (EMAIL_USER / EMAIL_PASS).');
-    }
-
     const link = `${BACKEND_URL}/api/verificar-cuenta?token=${token}`;
-    const payload = {
-        from: `"MIGO - Comunidad de Mascotas" <${EMAIL_USER}>`,
-        to: correoDestino,
-        subject: 'Verifica tu cuenta en MIGO',
-        html: `
-            <div style="font-family: Arial, sans-serif; color: #223338; max-width: 500px;">
-                <h2 style="color: #0f9d8e;">¡Hola ${nombre}!</h2>
-                <p>Gracias por registrarte en MIGO. Haz clic aquí para activar tu cuenta:</p>
-                <p style="text-align:center; margin: 24px 0;">
-                    <a href="${link}" style="background:#0f9d8e; color:#fff; padding:12px 24px; border-radius:8px; text-decoration:none; font-weight:bold;">
-                        Verificar mi cuenta
-                    </a>
-                </p>
-                <p>Si el botón no funciona, usa este enlace: ${link}</p>
-            </div>
-        `
-    };
-
-    let lastError = null;
-
-    for (const { name, transport } of mailTransports) {
+    if (MAIL_PROVIDER === 'resend') {
+        console.log(`[MAIL] Intentando envío de verificación con resend para ${correoDestino}`);
         try {
-            console.log(`[MAIL] Intentando envío de verificación con ${name} para ${correoDestino}`);
-            const result = await transport.sendMail(payload);
-            console.log(`[MAIL] Correo de verificación enviado con ${name} a ${correoDestino}. messageId=${result.messageId}`);
+            const result = await enviarCorreoVerificacionConResend(correoDestino, nombre, link);
+            console.log(`[MAIL] Correo de verificación enviado con resend a ${correoDestino}. id=${result?.id || 'N/A'}`);
             return result;
         } catch (error) {
-            lastError = error;
             const categoria = clasificarErrorCorreo(error);
-            console.error(`[MAIL] Falló ${name} para ${correoDestino}. categoria=${categoria} code=${error?.code || 'N/A'} mensaje=${error?.message || error}`);
+            console.error('[MAIL] Falló resend para', correoDestino, 'categoria=', categoria, 'code=', error?.code || 'N/A', 'mensaje=', error?.message || error, 'details=', error?.details || null);
+            error.category = categoria;
+            throw error;
         }
     }
 
-    const categoriaFinal = clasificarErrorCorreo(lastError || {});
-    const errorFinal = new Error(`No se pudo enviar el correo de verificación. categoria=${categoriaFinal}`);
-    errorFinal.code = lastError?.code || categoriaFinal;
-    errorFinal.details = lastError?.message || String(lastError || 'Error desconocido');
-    throw errorFinal;
+    const error = new Error(`MAIL_PROVIDER no soportado: ${MAIL_PROVIDER}`);
+    error.code = 'MAIL_PROVIDER_INVALID';
+    throw error;
 }
 
 // BD — conexión
