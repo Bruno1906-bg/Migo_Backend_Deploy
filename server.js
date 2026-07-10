@@ -24,6 +24,18 @@ const CLOUDINARY_API_SECRET = process.env.CDN_SECRET || process.env.CLOUDINARY_A
 const CLOUDINARY_URL = process.env.CLOUDINARY_URL;
 
 function obtenerConfigCloudinary() {
+    if (CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET) {
+        return {
+            source: 'CDN_*',
+            config: {
+                cloud_name: CLOUDINARY_CLOUD_NAME,
+                api_key: CLOUDINARY_API_KEY,
+                api_secret: CLOUDINARY_API_SECRET,
+                secure: true
+            }
+        };
+    }
+
     if (CLOUDINARY_URL) {
         try {
             const parsed = new URL(CLOUDINARY_URL);
@@ -37,12 +49,12 @@ function obtenerConfigCloudinary() {
                 }
             };
         } catch (error) {
-            console.error('[CLOUDINARY] CLOUDINARY_URL inválida, usando CDN_* si existen:', error.message);
+            console.error('[CLOUDINARY] CLOUDINARY_URL inválida:', error.message);
         }
     }
 
     return {
-        source: 'CDN_*',
+        source: 'NO_CONFIG',
         config: {
             cloud_name: CLOUDINARY_CLOUD_NAME,
             api_key: CLOUDINARY_API_KEY,
