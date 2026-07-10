@@ -1125,16 +1125,39 @@ app.post('/api/admin/reportar-usuario', (req, res) => {
     const { id_usuario_reportado, id_admin, motivo } = req.body;
 
     verificarAdmin(id_admin, (err, esAdmin) => {
-        if (err) return res.status(500).json({ message: err.message });
+        if (err) {
+            console.error('[ADMIN][REPORTAR] Error verificando admin:', { id_admin, error: err.message });
+            return res.status(500).json({ message: err.message });
+        }
         if (!esAdmin) return res.status(403).json({ message: "No tienes permisos" });
 
         db.query("SELECT correo, nombre FROM usuarios WHERE id_usuario = ?", [id_usuario_reportado], (err, results) => {
+            if (err) {
+                console.error('[ADMIN][REPORTAR] Error buscando usuario:', { id_usuario_reportado, error: err.message });
+                return res.status(500).json({ error: err.message });
+            }
             const usuario = results && results[0];
 
             db.query("INSERT INTO reportes_usuario (id_usuario_reportado, id_admin, motivo) VALUES (?, ?, ?)", [id_usuario_reportado, id_admin, motivo], (err) => {
-                if (err) return res.status(500).json({ error: err.message });
+                if (err) {
+                    console.error('[ADMIN][REPORTAR] Error insertando reporte:', {
+                        id_usuario_reportado,
+                        id_admin,
+                        motivo,
+                        error: err.message,
+                        code: err.code || 'N/A'
+                    });
+                    return res.status(500).json({ error: err.message });
+                }
                 db.query("UPDATE usuarios SET estado = 'reportado' WHERE id_usuario = ?", [id_usuario_reportado], (err) => {
-                    if (err) return res.status(500).json({ error: err.message });
+                    if (err) {
+                        console.error('[ADMIN][REPORTAR] Error actualizando estado del usuario:', {
+                            id_usuario_reportado,
+                            error: err.message,
+                            code: err.code || 'N/A'
+                        });
+                        return res.status(500).json({ error: err.message });
+                    }
 
                     if (usuario) {
                         enviarAvisoAdministrativo(usuario.correo, usuario.nombre, motivo, false).catch(error => {
