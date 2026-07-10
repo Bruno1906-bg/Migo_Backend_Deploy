@@ -38,23 +38,57 @@ const upload = multer({ dest: 'uploads/' });
 const EMAIL_USER = process.env.EMAIL_USER || process.env.SMTP_USER;
 const EMAIL_PASS = process.env.EMAIL_PASS || process.env.SMTP_PASS;
 
-const transporter = nodemailer.createTransport({
+const createGmailTransport = (port, secure) => nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
+    port,
+    secure,
+    family: 4,
     auth: {
         user: EMAIL_USER,
         pass: EMAIL_PASS
     }
 });
 
+const mailTransports = [
+    { name: 'gmail-465', transport: createGmailTransport(465, true) },
+    { name: 'gmail-587', transport: createGmailTransport(587, false) }
+];
+
+function clasificarErrorCorreo(error) {
+    const code = error?.code || '';
+    const message = `${error?.message || ''}`.toLowerCase();
+
+    if (!EMAIL_USER || !EMAIL_PASS) {
+        return 'CREDENTIALS_MISSING';
+    }
+
+    if (code === 'EAUTH' || message.includes('username and password not accepted') || message.includes('invalid login')) {
+        return 'CREDENTIALS_INVALID';
+    }
+
+    if (code === 'ENETUNREACH' || code === 'EHOSTUNREACH' || code === 'ETIMEDOUT' || code === 'ESOCKET' || code === 'ECONNRESET') {
+        return 'NETWORK_BLOCKED';
+    }
+
+    if (code === 'EAI_AGAIN' || code === 'ENOTFOUND') {
+        return 'DNS_OR_RESOLUTION';
+    }
+
+    if (message.includes('less secure') || message.includes('application-specific password') || message.includes('app password')) {
+        return 'GMAIL_APP_PASSWORD';
+    }
+
+    return 'UNKNOWN_SMTP_ERROR';
+}
+
 async function enviarCorreoVerificacion(correoDestino, nombre, token) {
     if (!EMAIL_USER || !EMAIL_PASS) {
+        console.error('[MAIL] Faltan credenciales de correo en Railway. Revisa EMAIL_USER y EMAIL_PASS.');
         throw new Error('Faltan las credenciales de correo en Railway (EMAIL_USER / EMAIL_PASS).');
     }
 
     const link = `${BACKEND_URL}/api/verificar-cuenta?token=${token}`;
-    return await transporter.sendMail({
+    const payload = {
         from: `"MIGO - Comunidad de Mascotas" <${EMAIL_USER}>`,
         to: correoDestino,
         subject: 'Verifica tu cuenta en MIGO',
@@ -70,7 +104,28 @@ async function enviarCorreoVerificacion(correoDestino, nombre, token) {
                 <p>Si el botón no funciona, usa este enlace: ${link}</p>
             </div>
         `
-    });
+    };
+
+    let lastError = null;
+
+    for (const { name, transport } of mailTransports) {
+        try {
+            console.log(`[MAIL] Intentando envío de verificación con ${name} para ${correoDestino}`);
+            const result = await transport.sendMail(payload);
+            console.log(`[MAIL] Correo de verificación enviado con ${name} a ${correoDestino}. messageId=${result.messageId}`);
+            return result;
+        } catch (error) {
+            lastError = error;
+            const categoria = clasificarErrorCorreo(error);
+            console.error(`[MAIL] Falló ${name} para ${correoDestino}. categoria=${categoria} code=${error?.code || 'N/A'} mensaje=${error?.message || error}`);
+        }
+    }
+
+    const categoriaFinal = clasificarErrorCorreo(lastError || {});
+    const errorFinal = new Error(`No se pudo enviar el correo de verificación. categoria=${categoriaFinal}`);
+    errorFinal.code = lastError?.code || categoriaFinal;
+    errorFinal.details = lastError?.message || String(lastError || 'Error desconocido');
+    throw errorFinal;
 }
 
 // BD — conexión
@@ -159,10 +214,15 @@ const registrarUsuarioHandler = (req, res) => {
                     id: result.insertId
                 });
             } catch (mailErr) {
-                console.error("ERROR EN ENVÍO DE CORREO:", mailErr);
+                console.error('[MAIL] ERROR EN ENVÍO DE CORREO:', {
+                    code: mailErr?.code || 'N/A',
+                    category: clasificarErrorCorreo(mailErr),
+                    message: mailErr?.message || String(mailErr),
+                    details: mailErr?.details || null
+                });
                 return res.status(201).json({ 
                     message: 'Usuario registrado correctamente, pero no se pudo enviar el correo de verificación.',
-                    warning: mailErr.message,
+                    warning: mailErr.details ? `${mailErr.message} (${mailErr.details})` : mailErr.message,
                     id: result.insertId
                 });
             }
@@ -429,9 +489,15 @@ app.post('/api/registro-vet', (req, res) => {
                         try {
                             await enviarCorreoVerificacion(correo, nombre, token);
                         } catch (mailErr) {
-                            console.error("Error al enviar correo de verificación (vet):", mailErr.message);
+                            console.error('[MAIL] Error al enviar correo de verificación (vet):', {
+                                code: mailErr?.code || 'N/A',
+                                category: clasificarErrorCorreo(mailErr),
+                                message: mailErr?.message || String(mailErr),
+                                details: mailErr?.details || null
+                            });
                             return res.json({
-                                message: 'Negocio registrado, pero no se pudo enviar el correo de verificación. Contacta al administrador.'
+                                message: 'Negocio registrado, pero no se pudo enviar el correo de verificación. Contacta al administrador.',
+                                warning: mailErr.details ? `${mailErr.message} (${mailErr.details})` : mailErr.message
                             });
                         }
 
