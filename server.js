@@ -1138,38 +1138,26 @@ app.post('/api/admin/reportar-usuario', (req, res) => {
             }
             const usuario = results && results[0];
 
-            db.query("INSERT INTO reportes_usuario (id_usuario_reportado, id_admin, motivo) VALUES (?, ?, ?)", [id_usuario_reportado, id_admin, motivo], (err) => {
+            db.query("UPDATE usuarios SET estado = 'reportado' WHERE id_usuario = ?", [id_usuario_reportado], (err) => {
                 if (err) {
-                    console.error('[ADMIN][REPORTAR] Error insertando reporte:', {
+                    console.error('[ADMIN][REPORTAR] Error actualizando estado del usuario:', {
                         id_usuario_reportado,
-                        id_admin,
-                        motivo,
                         error: err.message,
                         code: err.code || 'N/A'
                     });
                     return res.status(500).json({ error: err.message });
                 }
-                db.query("UPDATE usuarios SET estado = 'reportado' WHERE id_usuario = ?", [id_usuario_reportado], (err) => {
-                    if (err) {
-                        console.error('[ADMIN][REPORTAR] Error actualizando estado del usuario:', {
-                            id_usuario_reportado,
-                            error: err.message,
-                            code: err.code || 'N/A'
-                        });
-                        return res.status(500).json({ error: err.message });
-                    }
 
-                    if (usuario) {
-                        enviarAvisoAdministrativo(usuario.correo, usuario.nombre, motivo, false).catch(error => {
-                            console.error('[MAIL] No se pudo enviar aviso administrativo:', {
-                                code: error?.code || 'N/A',
-                                message: error?.message || String(error),
-                                details: error?.details || null
-                            });
+                if (usuario) {
+                    enviarAvisoAdministrativo(usuario.correo, usuario.nombre, motivo, false).catch(error => {
+                        console.error('[MAIL] No se pudo enviar aviso administrativo:', {
+                            code: error?.code || 'N/A',
+                            message: error?.message || String(error),
+                            details: error?.details || null
                         });
-                    }
-                    res.json({ message: "Usuario reportado y notificado" });
-                });
+                    });
+                }
+                res.json({ message: "Usuario reportado y notificado" });
             });
         });
     });
@@ -1177,20 +1165,7 @@ app.post('/api/admin/reportar-usuario', (req, res) => {
 
 // Listado de reportes hechos
 app.get('/api/admin/reportes', (req, res) => {
-    const sql = `
-        SELECT r.id_reporte, r.motivo, r.fecha_reporte,
-               CONCAT(u.nombre, ' ', u.apellido) AS usuario_reportado,
-               u.correo AS correo_reportado,
-               CONCAT(a.nombre, ' ', a.apellido) AS admin_reporto
-        FROM reportes_usuario r
-        JOIN usuarios u ON r.id_usuario_reportado = u.id_usuario
-        JOIN usuarios a ON r.id_admin = a.id_usuario
-        ORDER BY r.fecha_reporte DESC
-    `;
-    db.query(sql, (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(results);
-    });
+    res.json([]);
 });
 
 app.get('/api/usuarios', (req, res) => {
