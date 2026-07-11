@@ -236,19 +236,36 @@ async function enviarCorreoVerificacionConBrevo(correoDestino, nombre, link) {
     });
 }
 
-async function enviarAvisoAdministrativo(correoDestino, nombre, motivo, esEliminacion) {
-    const asunto = esEliminacion
-        ? 'Tu publicación fue eliminada en MIGO'
-        : 'Tu cuenta fue reportada en MIGO';
+async function enviarAvisoAdministrativo(correoDestino, nombre, motivo, esEliminacion, nombrePublicacion = '') {
+    const asunto = nombrePublicacion
+        ? `Reporte sobre publicación: ${nombrePublicacion}`
+        : (esEliminacion
+            ? 'Tu publicación fue eliminada en MIGO'
+            : 'Tu cuenta fue reportada en MIGO');
+
+    const detallesReporte = nombrePublicacion
+        ? `
+            <div style="margin-top:16px; padding:16px; border:1px solid #d9e6e4; border-radius:10px; background:#f7fbfa;">
+                <h3 style="margin:0 0 10px; color:#0f9d8e; font-size:18px;">Detalles del reporte</h3>
+                <p style="margin:0 0 8px;"><strong>Publicación:</strong> ${nombrePublicacion}</p>
+                <p style="margin:0;"><strong>Motivo:</strong> ${motivo}</p>
+            </div>
+        `
+        : `
+            <div style="margin-top:16px; padding:16px; border:1px solid #d9e6e4; border-radius:10px; background:#f7fbfa;">
+                <h3 style="margin:0 0 10px; color:#0f9d8e; font-size:18px;">Detalles del reporte</h3>
+                <p style="margin:0;"><strong>Motivo:</strong> ${motivo}</p>
+            </div>
+        `;
 
     const htmlContent = `
-        <div style="font-family: Arial, sans-serif; color: #223338; max-width: 500px;">
-            <h2 style="color: #0f9d8e;">Hola ${nombre}</h2>
-            <p>${esEliminacion
+        <div style="font-family: Arial, sans-serif; color: #223338; max-width: 560px; line-height: 1.5;">
+            <h2 style="color: #0f9d8e; margin-bottom: 8px;">Hola ${nombre}</h2>
+            <p style="margin-top:0;">${esEliminacion
                 ? 'Se eliminó una publicación asociada a tu cuenta.'
                 : 'Tu cuenta fue reportada por un administrador.'}</p>
-            <p><strong>Motivo:</strong> ${motivo}</p>
-            <p>Si crees que se trata de un error, revisa tu actividad en la plataforma.</p>
+            ${detallesReporte}
+            <p style="margin-top:16px;">Si crees que se trata de un error, revisa tu actividad en la plataforma.</p>
         </div>
     `;
 
@@ -258,10 +275,13 @@ async function enviarAvisoAdministrativo(correoDestino, nombre, motivo, esElimin
         esEliminacion
             ? 'Se eliminó una publicación asociada a tu cuenta.'
             : 'Tu cuenta fue reportada por un administrador.',
+        '',
+        'Detalles del reporte',
+        nombrePublicacion ? `Publicación: ${nombrePublicacion}` : null,
         `Motivo: ${motivo}`,
         '',
         'Si crees que se trata de un error, revisa tu actividad en la plataforma.'
-    ].join('\n');
+    ].filter(Boolean).join('\n');
 
     return enviarCorreoConBrevo({
         correoDestino,
@@ -1135,7 +1155,7 @@ app.delete('/api/admin/publicaciones/:id_publi', (req, res) => {
 
 // Reportar a un usuario (queda registrado el motivo y se marca su estado)
 app.post('/api/admin/reportar-usuario', (req, res) => {
-    const { id_usuario_reportado, id_admin, motivo } = req.body;
+    const { id_usuario_reportado, id_admin, motivo, nombre_publicacion = '' } = req.body;
 
     verificarAdmin(id_admin, (err, esAdmin) => {
         if (err) {
@@ -1152,7 +1172,7 @@ app.post('/api/admin/reportar-usuario', (req, res) => {
             const usuario = results && results[0];
 
             if (usuario) {
-                enviarAvisoAdministrativo(usuario.correo, usuario.nombre, motivo, false).catch(error => {
+                enviarAvisoAdministrativo(usuario.correo, usuario.nombre, motivo, false, nombre_publicacion).catch(error => {
                     console.error('[MAIL] No se pudo enviar aviso administrativo:', {
                         code: error?.code || 'N/A',
                         message: error?.message || String(error),
