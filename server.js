@@ -445,6 +445,13 @@ const loginHandler = (req, res) => {
         if (err) return res.status(500).json({ message: 'Error de servidor' });
         if (results.length > 0) {
             const usuario = results[0];
+            if (usuario.rol !== 'usuario' && usuario.rol !== 'administrador') {
+                registrarLogLoginFallido(correo, `Intento de login con rol no permitido en login normal: ${usuario.rol}`);
+                return res.status(403).json({
+                    message: 'Este correo pertenece a una veterinaria. Usa el acceso de veterinaria.',
+                    rol: usuario.rol
+                });
+            }
             if (usuario.verificado === 0) return res.status(403).json({ message: 'Debes verificar tu cuenta antes de iniciar sesión.' });
             res.json(usuario);
         } else {
