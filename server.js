@@ -1080,7 +1080,20 @@ app.put('/api/comentarios/:id_comentario', (req, res) => {
 function verificarAdmin(id_admin, callback) {
     db.query("SELECT rol FROM usuarios WHERE id_usuario = ?", [id_admin], (err, rows) => {
         if (err) return callback(err, false);
-        if (rows.length === 0 || rows[0].rol !== 'administrador') return callback(null, false);
+
+        if (rows.length === 0) {
+            console.error('[ADMIN] No se encontró usuario para validar admin:', { id_admin });
+            return callback(null, false);
+        }
+
+        const rol = String(rows[0].rol || '').trim().toLowerCase();
+        const esAdmin = rol === 'administrador' || rol === 'admin' || rol.includes('admin');
+
+        if (!esAdmin) {
+            console.error('[ADMIN] Usuario no tiene rol de administrador:', { id_admin, rolEncontrado: rows[0].rol });
+            return callback(null, false);
+        }
+
         callback(null, true);
     });
 }
