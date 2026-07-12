@@ -737,7 +737,7 @@ app.get('/api/veterinarias/detallado', (req, res) => {
         const promises = vets.map(vet => {
             return new Promise((resolve, reject) => {
                 const sqlHorarios = `
-                    SELECT h.id_dia, d.nombre AS dia, h.hora_apertura, h.hora_cierre, h.cerrado
+                    SELECT DISTINCT h.id_dia, d.nombre AS dia, h.hora_apertura, h.hora_cierre, h.cerrado
                     FROM horarios_vet h
                     JOIN dias_semana d ON h.id_dia = d.id_dia
                     WHERE h.id_vet = ?
@@ -783,7 +783,7 @@ app.get('/api/veterinaria/:id/detallado', (req, res) => {
 
         const vet = results[0];
         const sqlHorarios = `
-            SELECT h.id_dia, d.nombre AS dia, h.hora_apertura, h.hora_cierre, h.cerrado
+            SELECT DISTINCT h.id_dia, d.nombre AS dia, h.hora_apertura, h.hora_cierre, h.cerrado
             FROM horarios_vet h
             JOIN dias_semana d ON h.id_dia = d.id_dia
             WHERE h.id_vet = ?
@@ -859,7 +859,7 @@ app.post('/api/veterinarias/:id/logo', upload.single('logo'), async (req, res) =
 // Obtener horarios de una veterinaria
 app.get('/api/horarios/:idVet', (req, res) => {
     const sql = `
-        SELECT h.id_horario, h.id_vet, h.id_dia, d.nombre AS dia,
+        SELECT DISTINCT h.id_vet, h.id_dia, d.nombre AS dia,
                h.hora_apertura, h.hora_cierre, h.cerrado
         FROM horarios_vet h
         JOIN dias_semana d ON h.id_dia = d.id_dia
@@ -873,7 +873,6 @@ app.get('/api/horarios/:idVet', (req, res) => {
 });
 
 // Actualizar horarios de una veterinaria
-// Requiere UNIQUE KEY (id_vet, id_dia) en horarios_vet para que el UPSERT funcione correctamente
 app.put('/api/horarios/:idVet', (req, res) => {
     const { idVet } = req.params;
     const horarios = req.body;
@@ -881,25 +880,36 @@ app.put('/api/horarios/:idVet', (req, res) => {
     db.beginTransaction(err => {
         if (err) return res.status(500).json({ error: "Error de conexión" });
 
-        const dias = Object.keys(horarios);
-        dias.forEach(id_dia => {
-            const { hora_apertura, hora_cierre, cerrado } = horarios[id_dia];
-            const sql = `
-                INSERT INTO horarios_vet (id_vet, id_dia, hora_apertura, hora_cierre, cerrado)
-                VALUES (?, ?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE
-                    hora_apertura = VALUES(hora_apertura),
-                    hora_cierre = VALUES(hora_cierre),
-                    cerrado = VALUES(cerrado)
-            `;
-            db.query(sql, [idVet, id_dia, hora_apertura || null, hora_cierre || null, cerrado ? 1 : 0], (err) => {
-                if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
-            });
-        });
+        db.query('DELETE FROM horarios_vet WHERE id_vet = ?', [idVet], (err) => {
+            if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
 
-        db.commit(err => {
-            if (err) return db.rollback(() => res.status(500).json({ error: "Error al guardar horarios" }));
-            res.json({ message: "Horarios actualizados correctamente" });
+            const values = Object.entries(horarios).map(([id_dia, horario]) => [
+                idVet,
+                id_dia,
+                horario.hora_apertura || null,
+                horario.hora_cierre || null,
+                horario.cerrado ? 1 : 0
+            ]);
+
+            if (values.length === 0) {
+                return db.commit(err => {
+                    if (err) return db.rollback(() => res.status(500).json({ error: "Error al guardar horarios" }));
+                    res.json({ message: "Horarios actualizados correctamente" });
+                });
+            }
+
+            db.query(
+                'INSERT INTO horarios_vet (id_vet, id_dia, hora_apertura, hora_cierre, cerrado) VALUES ?',
+                [values],
+                err => {
+                    if (err) return db.rollback(() => res.status(500).json({ error: err.message }));
+
+                    db.commit(err => {
+                        if (err) return db.rollback(() => res.status(500).json({ error: "Error al guardar horarios" }));
+                        res.json({ message: "Horarios actualizados correctamente" });
+                    });
+                }
+            );
         });
     });
 });
