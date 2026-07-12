@@ -722,7 +722,6 @@ app.get('/api/veterinarias', (req, res) => {
     });
 });
 
-// ⚠️ IMPORTANTE: esta ruta debe ir ANTES de /api/veterinaria/:id para no chocar con el parámetro
 // Veterinarias con horarios y servicios
 app.get('/api/veterinarias/detallado', (req, res) => {
     const sql = `
