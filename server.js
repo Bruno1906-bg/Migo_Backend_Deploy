@@ -439,6 +439,26 @@ app.get('/api/usuarios/:id', (req, res) => {
     });
 });
 
+app.put('/api/usuarios/:id_usuario', (req, res) => {
+    const { id_usuario } = req.params;
+    const { nombre, apellido, correo, telefono, direccion, id_colonia } = req.body;
+
+    const sql = `
+        UPDATE usuarios
+        SET nombre = ?, apellido = ?, correo = ?, telefono = ?, direccion = ?, id_colonia = ?
+        WHERE id_usuario = ?
+    `;
+
+    db.query(sql, [nombre, apellido, correo, telefono, direccion, id_colonia, id_usuario], (err, result) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Usuario no encontrado' });
+        }
+
+        res.json({ message: 'Perfil actualizado correctamente' });
+    });
+});
+
 const loginHandler = (req, res) => {
     const { correo, contrasena } = req.body;
     db.query("SELECT id_usuario, nombre, rol, verificado FROM usuarios WHERE correo = ? AND contrasena = ?", [correo, contrasena], (err, results) => {
