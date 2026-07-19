@@ -367,6 +367,14 @@ CREATE TABLE IF NOT EXISTS `veterinarias` (
   `id_colonia` int DEFAULT NULL,
   `latitud` decimal(10,7) DEFAULT NULL,
   `longitud` decimal(10,7) DEFAULT NULL,
+  `estado_verificacion` varchar(20) NOT NULL DEFAULT 'sin_solicitud',
+  `documento_verificacion_blob` longblob DEFAULT NULL,
+  `documento_verificacion_nombre` varchar(255) DEFAULT NULL,
+  `documento_verificacion_tipo` varchar(100) DEFAULT NULL,
+  `documento_verificacion_tamano` int DEFAULT NULL,
+  `documento_verificacion_rechazo` text,
+  `documento_verificacion_subido_en` datetime DEFAULT NULL,
+  `documento_verificacion_resuelto_en` datetime DEFAULT NULL,
   PRIMARY KEY (`id_vet`),
   UNIQUE KEY `id_usuario` (`id_usuario`),
   KEY `id_colonia` (`id_colonia`),
@@ -425,7 +433,18 @@ ALTER TABLE usuarios
   ADD COLUMN token_verificacion VARCHAR(255) NULL,
   ADD COLUMN token_expira DATETIME NULL;
 
--- 2) IMPORTANTE: marca como verificados a los usuarios que ya existían
+-- 2) Columnas nuevas para la verificación de veterinarias
+ALTER TABLE veterinarias
+  ADD COLUMN estado_verificacion VARCHAR(20) NOT NULL DEFAULT 'sin_solicitud',
+  ADD COLUMN documento_verificacion_blob LONGBLOB NULL,
+  ADD COLUMN documento_verificacion_nombre VARCHAR(255) NULL,
+  ADD COLUMN documento_verificacion_tipo VARCHAR(100) NULL,
+  ADD COLUMN documento_verificacion_tamano INT NULL,
+  ADD COLUMN documento_verificacion_rechazo TEXT NULL,
+  ADD COLUMN documento_verificacion_subido_en DATETIME NULL,
+  ADD COLUMN documento_verificacion_resuelto_en DATETIME NULL;
+
+-- 3) IMPORTANTE: marca como verificados a los usuarios que ya existían
 --    (admin, usuarios y veterinarios de prueba), para que no se queden
 --    bloqueados por una regla que no existía cuando se registraron.
 UPDATE usuarios SET verificado = 1 WHERE verificado = 0;

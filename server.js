@@ -333,6 +333,27 @@ function asegurarColumnasUbicacionVeterinaria() {
     });
 }
 
+function asegurarColumnasVerificacionVeterinaria() {
+    const columnas = [
+        "ALTER TABLE veterinarias ADD COLUMN estado_verificacion VARCHAR(20) NOT NULL DEFAULT 'sin_solicitud'",
+        "ALTER TABLE veterinarias ADD COLUMN documento_verificacion_blob LONGBLOB DEFAULT NULL",
+        "ALTER TABLE veterinarias ADD COLUMN documento_verificacion_nombre VARCHAR(255) DEFAULT NULL",
+        "ALTER TABLE veterinarias ADD COLUMN documento_verificacion_tipo VARCHAR(100) DEFAULT NULL",
+        "ALTER TABLE veterinarias ADD COLUMN documento_verificacion_tamano INT DEFAULT NULL",
+        "ALTER TABLE veterinarias ADD COLUMN documento_verificacion_rechazo TEXT DEFAULT NULL",
+        "ALTER TABLE veterinarias ADD COLUMN documento_verificacion_subido_en DATETIME DEFAULT NULL",
+        "ALTER TABLE veterinarias ADD COLUMN documento_verificacion_resuelto_en DATETIME DEFAULT NULL"
+    ];
+
+    columnas.forEach(sql => {
+        db.query(sql, err => {
+            if (err && err.code !== 'ER_DUP_FIELDNAME') {
+                console.error('No se pudo asegurar la columna de verificación:', err.message);
+            }
+        });
+    });
+}
+
 db.connect(err => {
     if (err) {
         console.error('Error de conexión a la base de datos:', err.message);
@@ -340,6 +361,7 @@ db.connect(err => {
     }
 
     asegurarColumnasUbicacionVeterinaria();
+    asegurarColumnasVerificacionVeterinaria();
 });
 
 // Logs
@@ -732,7 +754,26 @@ app.post('/api/registro-vet', (req, res) => {
 // Veterinarias (listado simple)
 app.get('/api/veterinarias', (req, res) => {
     const sql = `
-        SELECT v.*, c.nombre AS nombre_colonia
+        SELECT
+            v.id_vet,
+            v.id_usuario,
+            v.nombre_establecimiento,
+            v.descripcion,
+            v.imagen_logo,
+            v.sitio_web,
+            v.correo_negocio,
+            v.telefono_local,
+            v.id_colonia,
+            v.latitud,
+            v.longitud,
+            v.estado_verificacion,
+            v.documento_verificacion_nombre,
+            v.documento_verificacion_tipo,
+            v.documento_verificacion_tamano,
+            v.documento_verificacion_rechazo,
+            v.documento_verificacion_subido_en,
+            v.documento_verificacion_resuelto_en,
+            c.nombre AS nombre_colonia
         FROM veterinarias v
         LEFT JOIN colonias c ON v.id_colonia = c.id_colonia
     `;
@@ -745,7 +786,26 @@ app.get('/api/veterinarias', (req, res) => {
 // Veterinarias con horarios y servicios
 app.get('/api/veterinarias/detallado', (req, res) => {
     const sql = `
-        SELECT v.*, c.nombre AS nombre_colonia
+        SELECT
+            v.id_vet,
+            v.id_usuario,
+            v.nombre_establecimiento,
+            v.descripcion,
+            v.imagen_logo,
+            v.sitio_web,
+            v.correo_negocio,
+            v.telefono_local,
+            v.id_colonia,
+            v.latitud,
+            v.longitud,
+            v.estado_verificacion,
+            v.documento_verificacion_nombre,
+            v.documento_verificacion_tipo,
+            v.documento_verificacion_tamano,
+            v.documento_verificacion_rechazo,
+            v.documento_verificacion_subido_en,
+            v.documento_verificacion_resuelto_en,
+            c.nombre AS nombre_colonia
         FROM veterinarias v
         LEFT JOIN colonias c ON v.id_colonia = c.id_colonia
     `;
@@ -791,7 +851,26 @@ app.get('/api/veterinarias/detallado', (req, res) => {
 app.get('/api/veterinaria/:id/detallado', (req, res) => {
     const { id } = req.params;
     const sqlVet = `
-        SELECT v.*, c.nombre AS nombre_colonia
+        SELECT
+            v.id_vet,
+            v.id_usuario,
+            v.nombre_establecimiento,
+            v.descripcion,
+            v.imagen_logo,
+            v.sitio_web,
+            v.correo_negocio,
+            v.telefono_local,
+            v.id_colonia,
+            v.latitud,
+            v.longitud,
+            v.estado_verificacion,
+            v.documento_verificacion_nombre,
+            v.documento_verificacion_tipo,
+            v.documento_verificacion_tamano,
+            v.documento_verificacion_rechazo,
+            v.documento_verificacion_subido_en,
+            v.documento_verificacion_resuelto_en,
+            c.nombre AS nombre_colonia
         FROM veterinarias v
         LEFT JOIN colonias c ON v.id_colonia = c.id_colonia
         WHERE v.id_vet = ?
@@ -873,6 +952,113 @@ app.post('/api/veterinarias/:id/logo', upload.single('logo'), async (req, res) =
         });
         res.status(500).json({ error: 'Error al subir logo: ' + err.message });
     }
+});
+
+// Subir documento de verificación de veterinaria
+app.post('/api/veterinarias/:id/verificacion', upload.single('documento'), async (req, res) => {
+    const id_vet = req.params.id;
+
+    if (!req.file) {
+        return res.status(400).json({ message: 'No se subió archivo' });
+    }
+
+    const tiposPermitidos = ['application/pdf', 'image/jpeg', 'image/png'];
+    if (!tiposPermitidos.includes(req.file.mimetype)) {
+        return res.status(400).json({ message: 'Formato no permitido. Usa PDF, JPG o PNG.' });
+    }
+
+    db.query(
+        `UPDATE veterinarias
+         SET estado_verificacion = 'pendiente',
+             documento_verificacion_blob = ?,
+             documento_verificacion_nombre = ?,
+             documento_verificacion_tipo = ?,
+             documento_verificacion_tamano = ?,
+             documento_verificacion_rechazo = NULL,
+             documento_verificacion_resuelto_en = NULL,
+             documento_verificacion_subido_en = NOW()
+         WHERE id_vet = ?`,
+        [req.file.buffer, req.file.originalname, req.file.mimetype, req.file.size, id_vet],
+        (err, result) => {
+            if (err) {
+                console.error('[UPLOAD] Error al guardar documento de verificación:', {
+                    code: err?.code || 'N/A',
+                    message: err?.message || String(err)
+                });
+                return res.status(500).json({ error: err.message });
+            }
+
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ message: 'Veterinaria no encontrada' });
+            }
+
+            res.json({
+                message: 'Documento enviado correctamente',
+                estado_verificacion: 'pendiente',
+                documento_verificacion_nombre: req.file.originalname,
+                documento_verificacion_tipo: req.file.mimetype,
+                documento_verificacion_tamano: req.file.size
+            });
+        }
+    );
+});
+
+// Descargar documento de verificación de veterinaria
+app.get('/api/veterinarias/:id/verificacion/documento', (req, res) => {
+    const { id } = req.params;
+
+    db.query(
+        `SELECT documento_verificacion_blob, documento_verificacion_nombre, documento_verificacion_tipo
+         FROM veterinarias
+         WHERE id_vet = ?`,
+        [id],
+        (err, rows) => {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+
+            if (rows.length === 0 || !rows[0].documento_verificacion_blob) {
+                return res.status(404).json({ message: 'Documento no encontrado' });
+            }
+
+            const documento = rows[0];
+            const nombreArchivo = (documento.documento_verificacion_nombre || 'documento-verificacion').replace(/"/g, '');
+
+            res.setHeader('Content-Type', documento.documento_verificacion_tipo || 'application/octet-stream');
+            res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`);
+            res.send(documento.documento_verificacion_blob);
+        }
+    );
+});
+
+// Actualizar estado de verificación de veterinaria
+app.put('/api/veterinarias/:id/verificacion', (req, res) => {
+    const { estado_verificacion, motivo_rechazo } = req.body;
+    const estadosValidos = ['pendiente', 'aprobada', 'rechazada', 'sin_solicitud'];
+
+    if (!estadosValidos.includes(estado_verificacion)) {
+        return res.status(400).json({ message: 'Estado de verificación inválido' });
+    }
+
+    const mensajeRechazo = estado_verificacion === 'rechazada' ? (motivo_rechazo || 'Tu solicitud fue rechazada. Sube de nuevo tu cédula o contacta a los administradores.') : null;
+    const sql = `
+        UPDATE veterinarias
+        SET estado_verificacion = ?,
+            documento_verificacion_rechazo = ?,
+            documento_verificacion_resuelto_en = NOW()
+        WHERE id_vet = ?
+    `;
+
+    db.query(sql, [estado_verificacion, mensajeRechazo, req.params.id], (err, result) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (result.affectedRows === 0) return res.status(404).json({ message: 'Veterinaria no encontrada' });
+
+        res.json({
+            message: 'Estado de verificación actualizado correctamente',
+            estado_verificacion,
+            documento_verificacion_rechazo: mensajeRechazo
+        });
+    });
 });
 
 // Obtener horarios de una veterinaria
@@ -1010,7 +1196,26 @@ app.get('/api/vet-servicios/:idVet', (req, res) => {
 // Obtener detalles de una veterinaria específica
 app.get('/api/veterinaria/:id', (req, res) => {
     const sql = `
-        SELECT v.*, c.nombre AS nombre_colonia
+        SELECT
+            v.id_vet,
+            v.id_usuario,
+            v.nombre_establecimiento,
+            v.descripcion,
+            v.imagen_logo,
+            v.sitio_web,
+            v.correo_negocio,
+            v.telefono_local,
+            v.id_colonia,
+            v.latitud,
+            v.longitud,
+            v.estado_verificacion,
+            v.documento_verificacion_nombre,
+            v.documento_verificacion_tipo,
+            v.documento_verificacion_tamano,
+            v.documento_verificacion_rechazo,
+            v.documento_verificacion_subido_en,
+            v.documento_verificacion_resuelto_en,
+            c.nombre AS nombre_colonia
         FROM veterinarias v
         LEFT JOIN colonias c ON v.id_colonia = c.id_colonia
         WHERE v.id_vet = ?
