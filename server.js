@@ -1006,6 +1006,7 @@ app.post('/api/veterinarias/:id/verificacion', upload.single('documento'), async
 // Descargar documento de verificación de veterinaria
 app.get('/api/veterinarias/:id/verificacion/documento', (req, res) => {
     const { id } = req.params;
+    const modoInline = String(req.query.inline || '').toLowerCase() === '1' || String(req.query.inline || '').toLowerCase() === 'true';
 
     db.query(
         `SELECT documento_verificacion_blob, documento_verificacion_nombre, documento_verificacion_tipo
@@ -1025,7 +1026,7 @@ app.get('/api/veterinarias/:id/verificacion/documento', (req, res) => {
             const nombreArchivo = (documento.documento_verificacion_nombre || 'documento-verificacion').replace(/"/g, '');
 
             res.setHeader('Content-Type', documento.documento_verificacion_tipo || 'application/octet-stream');
-            res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`);
+            res.setHeader('Content-Disposition', `${modoInline ? 'inline' : 'attachment'}; filename="${nombreArchivo}"`);
             res.send(documento.documento_verificacion_blob);
         }
     );
