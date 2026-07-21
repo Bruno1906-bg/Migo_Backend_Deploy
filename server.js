@@ -365,11 +365,11 @@ db.connect(err => {
 });
 
 // Logs
-function registrarLogLoginFallido(correo, detalle) {
+/*function registrarLogLoginFallido(correo, detalle) {
     db.query("INSERT INTO logs (correo, accion, detalle) VALUES (?, 'LOGIN_FALLIDO', ?)", [correo, detalle], (err) => {
         if (err) console.error("Error guardando log:", err.message);
     });
-}
+}*/
 
 // ═══════════════════════════════════════
 //  USUARIOS (Optimizado)
@@ -773,7 +773,7 @@ app.get('/api/veterinarias', (req, res) => {
             v.documento_verificacion_rechazo,
             v.documento_verificacion_subido_en,
             v.documento_verificacion_resuelto_en,
-            fn_dias_pendiente_verificacion(v.id_vet) AS dias_pendiente_verificacion, // Función para calcular días pendiente de verificación
+            fn_dias_pendiente_verificacion(v.id_vet) AS dias_pendiente_verificacion,
             c.nombre AS nombre_colonia
         FROM veterinarias v
         LEFT JOIN colonias c ON v.id_colonia = c.id_colonia
@@ -1449,7 +1449,7 @@ app.get('/api/admin/reportes', (req, res) => {
 app.get('/api/usuarios', (req, res) => {
     const sql = `
         SELECT id_usuario, nombre, correo, rol, telefono, total_reportes,
-               fn_usuario_en_riesgo(id_usuario) AS en_riesgo // Función para determinar si el usuario está en riesgo de reportes
+               fn_usuario_en_riesgo(id_usuario) AS en_riesgo
         FROM usuarios
         WHERE rol != 'administrador'
     `;
