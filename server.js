@@ -365,11 +365,11 @@ db.connect(err => {
 });
 
 // Logs
-/*function registrarLogLoginFallido(correo, detalle) {
+function registrarLogLoginFallido(correo, detalle) {
     db.query("INSERT INTO logs (correo, accion, detalle) VALUES (?, 'LOGIN_FALLIDO', ?)", [correo, detalle], (err) => {
         if (err) console.error("Error guardando log:", err.message);
     });
-}*/
+}
 
 // ═══════════════════════════════════════
 //  USUARIOS (Optimizado)
