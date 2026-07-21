@@ -773,6 +773,7 @@ app.get('/api/veterinarias', (req, res) => {
             v.documento_verificacion_rechazo,
             v.documento_verificacion_subido_en,
             v.documento_verificacion_resuelto_en,
+            fn_dias_pendiente_verificacion(v.id_vet) AS dias_pendiente_verificacion, // Función para calcular días pendiente de verificación
             c.nombre AS nombre_colonia
         FROM veterinarias v
         LEFT JOIN colonias c ON v.id_colonia = c.id_colonia
@@ -870,6 +871,7 @@ app.get('/api/veterinaria/:id/detallado', (req, res) => {
             v.documento_verificacion_rechazo,
             v.documento_verificacion_subido_en,
             v.documento_verificacion_resuelto_en,
+            fn_dias_pendiente_verificacion(v.id_vet) AS dias_pendiente_verificacion,
             c.nombre AS nombre_colonia
         FROM veterinarias v
         LEFT JOIN colonias c ON v.id_colonia = c.id_colonia
@@ -1034,32 +1036,26 @@ app.get('/api/veterinarias/:id/verificacion/documento', (req, res) => {
 
 // Actualizar estado de verificación de veterinaria
 app.put('/api/veterinarias/:id/verificacion', (req, res) => {
-    const { estado_verificacion, motivo_rechazo } = req.body;
+    const { estado_verificacion, motivo_rechazo, id_admin } = req.body;
     const estadosValidos = ['pendiente', 'aprobada', 'rechazada', 'sin_solicitud'];
 
     if (!estadosValidos.includes(estado_verificacion)) {
         return res.status(400).json({ message: 'Estado de verificación inválido' });
     }
 
-    const mensajeRechazo = estado_verificacion === 'rechazada' ? (motivo_rechazo || 'Tu solicitud fue rechazada. Sube de nuevo tu cédula o contacta a los administradores.') : null;
-    const sql = `
-        UPDATE veterinarias
-        SET estado_verificacion = ?,
-            documento_verificacion_rechazo = ?,
-            documento_verificacion_resuelto_en = NOW()
-        WHERE id_vet = ?
-    `;
-
-    db.query(sql, [estado_verificacion, mensajeRechazo, req.params.id], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (result.affectedRows === 0) return res.status(404).json({ message: 'Veterinaria no encontrada' });
-
-        res.json({
-            message: 'Estado de verificación actualizado correctamente',
-            estado_verificacion,
-            documento_verificacion_rechazo: mensajeRechazo
-        });
-    });
+    db.query(
+        "CALL sp_actualizar_estado_verificacion(?, ?, ?, ?)",
+        [req.params.id, estado_verificacion, motivo_rechazo || null, id_admin],
+        (err) => {
+            if (err) {
+                return res.status(err.sqlMessage ? 403 : 500).json({ message: err.sqlMessage || err.message });
+            }
+            res.json({
+                message: 'Estado de verificación actualizado correctamente',
+                estado_verificacion
+            });
+        }
+    );
 });
 
 // Obtener horarios de una veterinaria
@@ -1339,20 +1335,15 @@ app.put('/api/comentarios/:id_comentario', (req, res) => {
 //  ADMINISTRADOR
 // ═══════════════════════════════════════
 
+//Funcion fn_es_administrador para verificar si un usuario es administrador
 function verificarAdmin(id_admin, callback) {
-    db.query("SELECT rol FROM usuarios WHERE id_usuario = ?", [id_admin], (err, rows) => {
+    db.query("SELECT fn_es_administrador(?) AS es_admin", [id_admin], (err, rows) => {
         if (err) return callback(err, false);
 
-        if (rows.length === 0) {
-            console.error('[ADMIN] No se encontró usuario para validar admin:', { id_admin });
-            return callback(null, false);
-        }
-
-        const rol = String(rows[0].rol || '').trim().toLowerCase();
-        const esAdmin = rol === 'administrador' || rol === 'admin' || rol.includes('admin');
+        const esAdmin = rows.length > 0 && rows[0].es_admin === 1;
 
         if (!esAdmin) {
-            console.error('[ADMIN] Usuario no tiene rol de administrador:', { id_admin, rolEncontrado: rows[0].rol });
+            console.error('[ADMIN] Usuario no tiene permisos de administrador:', { id_admin });
             return callback(null, false);
         }
 
@@ -1372,24 +1363,24 @@ app.delete('/api/admin/publicaciones/:id_publi', (req, res) => {
         db.query("SELECT u.correo, u.nombre FROM usuarios u JOIN publicaciones p ON u.id_usuario = p.id_usuario WHERE p.id_publi = ?", [id_publi], (err, results) => {
             const usuario = results && results[0];
 
-            db.query("DELETE FROM fotos_publi WHERE id_publi = ?", [id_publi], () => {
-                db.query("DELETE FROM comentarios WHERE id_publi = ?", [id_publi], () => {
-                    db.query("DELETE FROM publicaciones WHERE id_publi = ?", [id_publi], (err, result) => {
-                        if (err) return res.status(500).json({ error: err.message });
-                        if (result.affectedRows === 0) return res.status(404).json({ message: "No encontrada" });
+            db.query("CALL sp_eliminar_publicacion_completa(?)", [id_publi], (err) => {
+                if (err) {
+                    if (err.sqlMessage && err.sqlMessage.includes('Publicación no encontrada')) {
+                        return res.status(404).json({ message: "No encontrada" });
+                    }
+                    return res.status(500).json({ error: err.message });
+                }
 
-                        if (usuario) {
-                            enviarAvisoAdministrativo(usuario.correo, usuario.nombre, 'Incumplimiento de normas', true).catch(error => {
-                                console.error('[MAIL] No se pudo enviar aviso administrativo:', {
-                                    code: error?.code || 'N/A',
-                                    message: error?.message || String(error),
-                                    details: error?.details || null
-                                });
-                            });
-                        }
-                        res.json({ message: "Publicación eliminada y usuario notificado" });
+                if (usuario) {
+                    enviarAvisoAdministrativo(usuario.correo, usuario.nombre, 'Incumplimiento de normas', true).catch(error => {
+                        console.error('[MAIL] No se pudo enviar aviso administrativo:', {
+                            code: error?.code || 'N/A',
+                            message: error?.message || String(error),
+                            details: error?.details || null
+                        });
                     });
-                });
+                }
+                res.json({ message: "Publicación eliminada y usuario notificado" });
             });
         });
     });
@@ -1406,25 +1397,47 @@ app.post('/api/admin/reportar-usuario', (req, res) => {
         }
         if (!esAdmin) return res.status(403).json({ message: "No tienes permisos" });
 
-        db.query("SELECT correo, nombre FROM usuarios WHERE id_usuario = ?", [id_usuario_reportado], (err, results) => {
-            if (err) {
-                console.error('[ADMIN][REPORTAR] Error buscando usuario:', { id_usuario_reportado, error: err.message });
-                return res.status(500).json({ error: err.message });
-            }
-            const usuario = results && results[0];
+        db.query(
+            "CALL sp_reportar_usuario(?, ?, ?, ?)",
+            [id_usuario_reportado, id_admin, motivo, nombre_publicacion || null],
+            (err) => {
+                if (err) {
+                    console.error('[ADMIN][REPORTAR] Error guardando reporte:', { id_usuario_reportado, error: err.message });
+                    return res.status(400).json({ message: err.sqlMessage || err.message });
+                }
 
-            if (usuario) {
-                enviarAvisoAdministrativo(usuario.correo, usuario.nombre, motivo, false, nombre_publicacion).catch(error => {
-                    console.error('[MAIL] No se pudo enviar aviso administrativo:', {
-                        code: error?.code || 'N/A',
-                        message: error?.message || String(error),
-                        details: error?.details || null
-                    });
+                db.query("SELECT correo, nombre FROM usuarios WHERE id_usuario = ?", [id_usuario_reportado], (err, results) => {
+                    if (err) return res.status(500).json({ error: err.message });
+                    const usuario = results && results[0];
+
+                    if (usuario) {
+                        enviarAvisoAdministrativo(usuario.correo, usuario.nombre, motivo, false, nombre_publicacion).catch(error => {
+                            console.error('[MAIL] No se pudo enviar aviso administrativo:', {
+                                code: error?.code || 'N/A',
+                                message: error?.message || String(error)
+                            });
+                        });
+                    }
+
+                    res.json({ message: "Usuario reportado y notificado" });
                 });
             }
+        );
+    });
+});
 
-            res.json({ message: "Usuario reportado y notificado" });
-        });
+app.get('/api/admin/reportes', (req, res) => {
+    const sql = `
+        SELECT r.id_reporte, r.id_usuario_reportado, u.nombre AS nombre_reportado,
+               u.correo AS correo_reportado, u.total_reportes,
+               r.id_admin, r.motivo, r.nombre_publicacion, r.fecha_reporte
+        FROM reportes_usuarios r
+        JOIN usuarios u ON u.id_usuario = r.id_usuario_reportado
+        ORDER BY r.fecha_reporte DESC
+    `;
+    db.query(sql, (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(results);
     });
 });
 
@@ -1435,7 +1448,8 @@ app.get('/api/admin/reportes', (req, res) => {
 
 app.get('/api/usuarios', (req, res) => {
     const sql = `
-        SELECT id_usuario, nombre, correo, rol, telefono
+        SELECT id_usuario, nombre, correo, rol, telefono, total_reportes,
+               fn_usuario_en_riesgo(id_usuario) AS en_riesgo // Función para determinar si el usuario está en riesgo de reportes
         FROM usuarios
         WHERE rol != 'administrador'
     `;
@@ -1445,64 +1459,19 @@ app.get('/api/usuarios', (req, res) => {
     });
 });
 
-app.delete('/api/usuarios/:id', async (req, res) => {
+app.delete('/api/usuarios/:id', (req, res) => {
     const id = req.params.id;
 
-    const executeQuery = (sql, params) => {
-        return new Promise((resolve, reject) => {
-            db.query(sql, params, (err, result) => {
-                if (err) return reject(err);
-                resolve(result);
-            });
-        });
-    };
-
-    try {
-        // 1) Fotos de las publicaciones del usuario
-        await executeQuery(
-            "DELETE FROM fotos_publi WHERE id_publi IN (SELECT id_publi FROM publicaciones WHERE id_usuario = ?)",
-            [id]
-        );
-
-        // 2) Comentarios hechos POR el usuario, y comentarios EN sus publicaciones
-        await executeQuery("DELETE FROM comentarios WHERE id_usuario = ?", [id]);
-        await executeQuery(
-            "DELETE FROM comentarios WHERE id_publi IN (SELECT id_publi FROM publicaciones WHERE id_usuario = ?)",
-            [id]
-        );
-
-        // 3) Reseñas hechas por el usuario
-        await executeQuery("DELETE FROM resenas WHERE id_usuario = ?", [id]);
-
-        // 4) Publicaciones del usuario
-        await executeQuery("DELETE FROM publicaciones WHERE id_usuario = ?", [id]);
-
-        // 5) Si el usuario es veterinario: reseñas a su vet, horarios, servicios y la veterinaria
-        await executeQuery(
-            "DELETE FROM resenas WHERE id_vet IN (SELECT id_vet FROM veterinarias WHERE id_usuario = ?)",
-            [id]
-        );
-        await executeQuery(
-            "DELETE FROM horarios_vet WHERE id_vet IN (SELECT id_vet FROM veterinarias WHERE id_usuario = ?)",
-            [id]
-        );
-        await executeQuery(
-            "DELETE FROM vet_servicios WHERE id_vet IN (SELECT id_vet FROM veterinarias WHERE id_usuario = ?)",
-            [id]
-        );
-        await executeQuery("DELETE FROM veterinarias WHERE id_usuario = ?", [id]);
-
-        // 6) Finalmente, el usuario
-        const result = await executeQuery("DELETE FROM usuarios WHERE id_usuario = ?", [id]);
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ message: "Usuario no encontrado" });
+    db.query("CALL sp_eliminar_usuario_completo(?)", [id], (err) => {
+        if (err) {
+            if (err.sqlMessage && err.sqlMessage.includes('Usuario no encontrado')) {
+                return res.status(404).json({ message: "Usuario no encontrado" });
+            }
+            console.error("Error al eliminar usuario:", err);
+            return res.status(500).json({ message: "Error: " + err.message });
         }
-
         res.json({ message: "Usuario eliminado correctamente" });
-    } catch (err) {
-        console.error("Error al eliminar usuario:", err);
-        res.status(500).json({ message: "Error: " + err.message });
-    }
+    });
 });
 
 
